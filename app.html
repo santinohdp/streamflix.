@@ -529,7 +529,7 @@ body.tv .iptv-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
     <!-- PlayerJS container -->
     <div id="pjs-wrap" class="hide"></div>
     <!-- iframe / ExoPlayer -->
-    <iframe id="pf" class="hide" allowfullscreen allow="fullscreen *;autoplay *;encrypted-media *;picture-in-picture *"></iframe>
+    <iframe id="pf" class="hide" allowfullscreen allow="fullscreen *;autoplay *;encrypted-media *;picture-in-picture *" referrerpolicy="no-referrer"></iframe>
     <!-- Ad-block edge layers (don't block center so player controls work) -->
     <div class="ad-edge ad-edge-top"></div>
     <div class="ad-edge-l"></div>
@@ -1104,6 +1104,9 @@ function closePlayer(){
   document.getElementById('player').classList.remove('vis');
   const pf=document.getElementById('pf');pf.src='about:blank';
   const pjsWrap=document.getElementById('pjs-wrap');
+  // Destroy HLS if active
+  const vid=pjsWrap.querySelector('video');
+  if(vid&&vid._hls){try{vid._hls.destroy();}catch(e){}}
   pjsWrap.innerHTML='';
   if(pjsPlayer){try{pjsPlayer=null;}catch(e){}}
 }
@@ -1138,25 +1141,65 @@ function renderIptvChannels(){
   body.querySelectorAll('img[data-src]').forEach(lazyImg);
 }
 function playIptv(url,name){
-  // For IPTV use iframe (HLS streams need special player)
   document.getElementById('pl-ttl').textContent=name||'Canal';
   document.getElementById('pl-src').textContent='IPTV Live';
-  document.getElementById('pl-engine').textContent='Live';
-  const pjsWrap=document.getElementById('pjs-wrap');
-  const pf=document.getElementById('pf');
-  // Try PlayerJS for HLS
-  pjsWrap.classList.remove('hide');pf.classList.add('hide');
-  pjsWrap.innerHTML='';
-  const vid=document.createElement('div');vid.id='pjs-player';vid.style.cssText='width:100%;height:100%;';
-  pjsWrap.appendChild(vid);
-  try{
-    pjsPlayer=new Playerjs({id:'pjs-player',file:url,autoplay:1});
-  }catch(e){
-    pjsWrap.classList.add('hide');pf.classList.remove('hide');
-    pf.src=url;
-  }
+  document.getElementById('pl-engine').textContent='HLS';
   document.getElementById('player').classList.add('vis');
   history.pushState({pl:1},'','');
+  const pjsWrap=document.getElementById('pjs-wrap');
+  const pf=document.getElementById('pf');
+  pf.classList.add('hide');
+  pjsWrap.innerHTML='';
+  pjsWrap.classList.remove('hide');
+  // Build native video + hls.js player
+  const isHLS = url.includes('.m3u8') || url.includes('m3u') || url.includes('/hls/') || url.includes('playlist');
+  const videoEl = document.createElement('video');
+  videoEl.id = 'iptv-video';
+  videoEl.style.cssText = 'width:100%;height:100%;background:#000;outline:none';
+  videoEl.controls = true;
+  videoEl.autoplay = true;
+  videoEl.playsInline = true;
+  pjsWrap.appendChild(videoEl);
+  if (isHLS) {
+    // Load hls.js dynamically
+    if (window.Hls) {
+      startHLS(videoEl, url);
+    } else {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js';
+      sc.onload = () => startHLS(videoEl, url);
+      sc.onerror = () => { videoEl.src = url; videoEl.play().catch(()=>{}); };
+      document.head.appendChild(sc);
+    }
+  } else {
+    // Direct MP4 or other
+    videoEl.src = url;
+    videoEl.play().catch(()=>{});
+  }
+}
+
+function startHLS(videoEl, url) {
+  if (Hls.isSupported()) {
+    const hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: true,
+      backBufferLength: 90
+    });
+    hls.loadSource(url);
+    hls.attachMedia(videoEl);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => videoEl.play().catch(()=>{}));
+    hls.on(Hls.Events.ERROR, (e,d) => {
+      if (d.fatal) { console.warn('[HLS] Fatal error, retrying...'); hls.destroy(); setTimeout(()=>startHLS(videoEl,url),3000); }
+    });
+    videoEl._hls = hls;
+  } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+    // Safari native HLS
+    videoEl.src = url;
+    videoEl.play().catch(()=>{});
+  } else {
+    videoEl.src = url;
+    videoEl.play().catch(()=>{});
+  }
 }
 
 // ═══ FAVORITES ═══════════════════════════════════════════
@@ -1193,29 +1236,42 @@ async function doSearch(q){
 // ═══ ULTRA AGGRESSIVE ADBLOCK ════════════════════════════
 function initAdBlock(){
 
-  // 1) Block window.open - show warning instead
-  window.open = function(url){
+  // 1) Block window.open — return fake window so scripts don't crash
+  window.open = function(url, target, features) {
     popWarn('Ventana emergente bloqueada ✓');
-    console.log('[AB] Bloqueado window.open:', url);
-    return {closed:true,close:()=>{}};
+    return { closed:true, close:()=>{}, focus:()=>{}, blur:()=>{}, document:{write:()=>{}} };
   };
+  try { Object.defineProperty(window,'open',{value:window.open,writable:false,configurable:false}); } catch(e){}
 
   // 2) Block alert / confirm / prompt
   window.alert   = () => {};
   window.confirm = () => false;
   window.prompt  = () => '';
 
-  // 3) Re-focus when blur (popup attempt)
-  window.addEventListener('blur', ()=>{
-    setTimeout(()=>{ try{window.focus();}catch(e){} }, 50);
-    popWarn('Intento de ventana emergente bloqueado');
+  // 3) Detect popups via blur — NO window.focus() (breaks player interaction)
+  let _blurWarn;
+  window.addEventListener('blur', () => {
+    clearTimeout(_blurWarn);
+    _blurWarn = setTimeout(() => popWarn('Ventana emergente bloqueada ✓'), 300);
   });
+  window.addEventListener('focus', () => clearTimeout(_blurWarn));
 
-  // 4) Block beforeunload (redirect attempts)
-  window.addEventListener('beforeunload',e=>{
-    e.preventDefault();e.returnValue='';
-    popWarn('Redirección bloqueada ✓');
-  },true);
+  // 4) Block intent:// and app deep links that trigger "Abrir con" dialog
+  // These come from inside iframes trying to launch external apps
+  const _origAssign = Object.getOwnPropertyDescriptor(window.location,'assign');
+  try {
+    // Block navigation to intent:// market:// tel:// etc
+    const BLOCKED_SCHEMES = ['intent:','market:','tel:','whatsapp:','tg:','fb:','instagram:'];
+    window.addEventListener('click', e => {
+      const a = e.target.closest('a');
+      if (!a) return;
+      const href = (a.href || a.getAttribute('href') || '');
+      if (BLOCKED_SCHEMES.some(s => href.startsWith(s))) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        popWarn('Enlace externo bloqueado ✓');
+      }
+    }, true);
+  } catch(e) {}
 
   // 5) Block target=_blank and ANY external navigation
   document.addEventListener('click',e=>{
@@ -1302,6 +1358,30 @@ function initAdBlock(){
   // 10) Protect iframe player - allow touches inside player body
   // The ad-edge layers have pointer-events:none so player controls work fine
   // Only the very edges (60px top/bottom, 35px sides) are covered
+
+  // 11) Block intent:// and app deep links from INSIDE iframe via navigation interception
+  // When iframe tries to navigate to intent://, it falls to window level
+  const INTENT_SCHEMES = ['intent://','market://','tel://','whatsapp://','tg://','fb://','instagram://','twitter://'];
+  window.addEventListener('navigate', e => {
+    const url = String(e.destination?.url || '');
+    if (INTENT_SCHEMES.some(s => url.startsWith(s))) {
+      e.preventDefault();
+      popWarn('App externo bloqueado ✓');
+    }
+  });
+
+  // Override location setter to block intent navigation
+  const locProto = window.Location.prototype;
+  ['assign','replace'].forEach(m => {
+    const orig = locProto[m];
+    locProto[m] = function(url) {
+      const u = String(url || '');
+      if (INTENT_SCHEMES.some(s => u.startsWith(s))) {
+        popWarn('Navegación bloqueada ✓'); return;
+      }
+      return orig.call(this, url);
+    };
+  });
 
   console.log('[AdBlock] Inicializado - protección máxima activada');
 }
