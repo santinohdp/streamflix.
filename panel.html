@@ -4,497 +4,663 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>StreamFlix Admin</title>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0a0a0f;--bg2:#12121a;--bg3:#1a1a26;--accent:#7c3aed;--accent2:#9f67ff;--red:#e50914;--text:#f0f0f8;--text2:#a0a0c0;--text3:#60607a;--gold:#f5c518;--green:#22c55e;--orange:#f97316}
-body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;min-height:100vh}
-::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:var(--accent);border-radius:4px}
+:root{
+  --bg:#08080e;--bg2:#0f0f1a;--bg3:#161624;--bg4:#1e1e2f;--bg5:#252538;
+  --acc:#6d28d9;--acc2:#8b5cf6;--acc3:#a78bfa;
+  --red:#dc2626;--gold:#f59e0b;--green:#10b981;--blue:#3b82f6;--orange:#f97316;
+  --text:#f8f8ff;--text2:#94949e;--text3:#4a4a5a;
+}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:rgba(109,40,217,.5);border-radius:6px}
 
-/* LOGIN */
-#login-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:999;padding:20px}
-#login-screen.hidden{display:none}
-.login-box{background:var(--bg2);border:1px solid rgba(255,255,255,.07);border-radius:20px;padding:48px 40px;width:100%;max-width:420px}
-.login-logo{font-size:1.6rem;font-weight:900;margin-bottom:6px;text-align:center}
-.login-logo .red{color:var(--red)}.login-logo .w{color:var(--text)}
-.login-sub{text-align:center;color:var(--text3);font-size:.85rem;margin-bottom:32px}
-.form-group{margin-bottom:16px}
-.form-group label{display:block;font-size:.8rem;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
-.form-group input,.form-group select{width:100%;background:var(--bg3);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;color:var(--text);font-size:.95rem;font-family:'Outfit',sans-serif;transition:border-color .2s}
-.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--accent)}
-.btn{padding:11px 20px;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;border:none;font-family:'Outfit',sans-serif;transition:all .2s}
-.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
-.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
-.btn-danger{background:rgba(229,9,20,.15);color:#ff6b6b;border:1px solid rgba(229,9,20,.3)}
-.btn-danger:hover{background:rgba(229,9,20,.25)}
-.btn-success{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
-.btn-ghost{background:var(--bg3);color:var(--text2);border:1px solid rgba(255,255,255,.07)}
-.btn-ghost:hover{background:var(--bg2)}
-.btn-sm{padding:6px 14px;font-size:.8rem;border-radius:8px}
-.btn-full{width:100%;margin-top:8px}
-.error-msg{background:rgba(229,9,20,.15);border:1px solid rgba(229,9,20,.3);color:#ff6b6b;border-radius:8px;padding:10px 14px;font-size:.85rem;margin-bottom:12px;display:none}
+/* SCREENS */
+#s-login{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 30% 50%,rgba(109,40,217,.12),transparent 60%),var(--bg);padding:20px}
+#s-login.hide{display:none}
+.lc{background:var(--bg2);border:1px solid var(--bg3);border-radius:24px;width:100%;max-width:820px;display:grid;grid-template-columns:1fr 1fr;overflow:hidden}
+@media(max-width:560px){.lc{grid-template-columns:1fr}.ld{display:none!important}}
+.lf{padding:44px 40px}
+.lf-logo{font-size:1.8rem;font-weight:900;letter-spacing:-1.5px;margin-bottom:4px}
+.lf-logo span{color:var(--red)}
+.lf-sub{font-size:.8rem;color:var(--text3);margin-bottom:28px}
+.lf-err{background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.25);color:#f87171;border-radius:10px;padding:10px 14px;font-size:.82rem;margin-bottom:12px;display:none}
+.fi{margin-bottom:13px}
+.fi label{display:block;font-size:.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
+.fi input,.fi select{width:100%;background:var(--bg3);border:1.5px solid transparent;border-radius:10px;padding:11px 13px;color:var(--text);font-size:.9rem;font-family:'Inter',sans-serif;transition:all .2s;outline:none}
+.fi input:focus,.fi select:focus{border-color:var(--acc2);background:var(--bg4)}
+.fi select option{background:var(--bg3)}
+.lf-btns{display:flex;gap:10px;margin-top:18px}
+.btn-main{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:none;padding:11px 20px;border-radius:10px;font-size:.88rem;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;transition:opacity .2s}
+.btn-main:hover{opacity:.9}
+.btn-sec{background:var(--bg3);color:var(--text2);border:1.5px solid var(--bg4);padding:11px 20px;border-radius:10px;font-size:.88rem;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
+.btn-sec:hover{background:var(--bg4)}
+.btn-danger{background:rgba(220,38,38,.12);color:#f87171;border:1px solid rgba(220,38,38,.25);padding:7px 14px;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif}
+.btn-danger:hover{background:rgba(220,38,38,.22)}
+.btn-sm{padding:6px 13px;font-size:.78rem;border-radius:8px}
+.btn-full{width:100%}
+.ld{background:linear-gradient(135deg,rgba(109,40,217,.12),rgba(220,38,38,.06));padding:44px 40px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;border-left:1px solid var(--bg3)}
+.ld-ic{font-size:3rem;margin-bottom:16px}
+.ld-title{font-size:1rem;font-weight:800;margin-bottom:10px}
+.ld-list{display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
+.ld-item{display:flex;align-items:center;gap:9px;font-size:.78rem;color:var(--text2)}
+.ld-dot{width:5px;height:5px;border-radius:50%;background:var(--acc2);flex-shrink:0}
 
-/* LAYOUT */
-#app{display:none;min-height:100vh}
-#app.visible{display:flex;flex-direction:column}
-.header{background:var(--bg2);border-bottom:1px solid rgba(255,255,255,.06);padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-.header-logo{font-size:1.1rem;font-weight:800}.header-logo .red{color:var(--red)}
-.server-badge{font-size:.75rem;background:rgba(124,58,237,.2);color:var(--accent2);border:1px solid rgba(124,58,237,.3);border-radius:20px;padding:4px 12px}
-.body-wrap{display:flex;flex:1}
-.sidebar{width:220px;background:var(--bg2);border-right:1px solid rgba(255,255,255,.06);padding:16px 0;flex-shrink:0;position:sticky;top:60px;height:calc(100vh - 60px)}
-.nav-item{display:flex;align-items:center;gap:12px;padding:12px 20px;cursor:pointer;transition:all .2s;font-size:.9rem;font-weight:600}
-.nav-item:hover,.nav-item.active{background:rgba(124,58,237,.15);color:var(--accent2)}
-.main{flex:1;padding:28px;overflow:hidden}
+/* APP LAYOUT */
+#app{display:none;min-height:100vh;flex-direction:column}
+#app.vis{display:flex}
+.header{height:56px;background:var(--bg2);border-bottom:1px solid rgba(255,255,255,.05);display:flex;align-items:center;padding:0 20px;gap:14px;position:sticky;top:0;z-index:100}
+.h-logo{font-size:1rem;font-weight:900;letter-spacing:-1px}
+.h-logo span{color:var(--red)}
+.h-badge{font-size:.7rem;background:rgba(109,40,217,.2);color:var(--acc3);border:1px solid rgba(109,40,217,.3);border-radius:20px;padding:3px 10px;font-weight:700}
+.h-spacer{flex:1}
+.h-btn{background:var(--bg3);color:var(--text2);border:1px solid rgba(255,255,255,.07);padding:7px 14px;border-radius:9px;font-size:.8rem;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
+.h-btn:hover{background:var(--bg4)}
+
+.body-wrap{display:flex;flex:1;min-height:0}
+.sidebar{width:210px;background:var(--bg2);border-right:1px solid rgba(255,255,255,.05);padding:14px 0;flex-shrink:0;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:11px 18px;cursor:pointer;transition:all .2s;font-size:.85rem;font-weight:600;color:var(--text2)}
+.nav-item svg{width:17px;height:17px;fill:var(--text3);flex-shrink:0;transition:fill .2s}
+.nav-item:hover{background:rgba(255,255,255,.04);color:var(--text)}
+.nav-item:hover svg{fill:var(--text2)}
+.nav-item.on{background:rgba(109,40,217,.15);color:var(--acc3)}
+.nav-item.on svg{fill:var(--acc3)}
+.nav-sep{height:1px;background:rgba(255,255,255,.05);margin:8px 0}
+
+.main{flex:1;padding:24px;overflow-y:auto;min-width:0}
 
 /* STATS */
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:28px}
-.stat-card{background:var(--bg2);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:20px}
-.stat-value{font-size:2rem;font-weight:800;margin-bottom:4px}
-.stat-label{font-size:.8rem;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;margin-bottom:24px}
+.stat-card{background:var(--bg2);border:1px solid rgba(255,255,255,.05);border-radius:14px;padding:18px 16px}
+.stat-val{font-size:2rem;font-weight:900;margin-bottom:3px}
+.stat-lbl{font-size:.72rem;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+.stat-card.acc .stat-val{background:linear-gradient(135deg,var(--acc2),var(--acc3));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 
 /* TABLE */
-.table-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.table-title{font-size:1.1rem;font-weight:700}
-.table-wrap{background:var(--bg2);border:1px solid rgba(255,255,255,.06);border-radius:14px;overflow:hidden;overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:600px}
-th{padding:12px 16px;text-align:left;font-size:.75rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,.06)}
-td{padding:12px 16px;font-size:.85rem;border-bottom:1px solid rgba(255,255,255,.04)}
+.tbl-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.tbl-title{font-size:.95rem;font-weight:800}
+.tbl-wrap{background:var(--bg2);border:1px solid rgba(255,255,255,.05);border-radius:14px;overflow:hidden;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th{padding:11px 14px;text-align:left;font-size:.7rem;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap}
+td{padding:11px 14px;font-size:.82rem;border-bottom:1px solid rgba(255,255,255,.04)}
 tr:last-child td{border-bottom:none}
-.badge{display:inline-flex;align-items:center;border-radius:6px;padding:3px 10px;font-size:.72rem;font-weight:700}
-.badge-green{background:rgba(34,197,94,.15);color:var(--green)}
-.badge-red{background:rgba(229,9,20,.15);color:#ff6b6b}
-.badge-orange{background:rgba(249,115,22,.15);color:var(--orange)}
-.actions{display:flex;gap:6px;flex-wrap:wrap}
+tr:hover td{background:rgba(255,255,255,.02)}
+.badge{display:inline-flex;align-items:center;border-radius:6px;padding:2px 9px;font-size:.68rem;font-weight:800;letter-spacing:.3px}
+.b-green{background:rgba(16,185,129,.14);color:var(--green)}
+.b-red{background:rgba(220,38,38,.14);color:#f87171}
+.b-orange{background:rgba(249,115,22,.14);color:var(--orange)}
+.b-blue{background:rgba(59,130,246,.14);color:#93c5fd}
+.b-purple{background:rgba(139,92,246,.14);color:var(--acc3)}
+.actions{display:flex;gap:5px;flex-wrap:wrap}
 
 /* MODAL */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(8px);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;transition:opacity .3s}
-.modal-overlay.open{opacity:1}
-.modal-overlay.hidden{display:none}
-.modal{background:var(--bg2);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:28px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;transform:translateY(20px);transition:transform .3s}
-.modal-overlay.open .modal{transform:translateY(0)}
-.modal-title{font-size:1.1rem;font-weight:700;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.06)}
-.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06)}
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(12px);z-index:500;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-ov.vis{display:flex}
+.modal{background:var(--bg2);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:26px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto}
+.modal-title{font-size:.95rem;font-weight:800;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.06)}
+.modal-footer{display:flex;gap:9px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.06)}
 
 /* LINKS SECTION */
-.links-list{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
-.link-row{background:var(--bg3);border-radius:10px;padding:12px;display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:start}
-.link-row input,.link-row select{background:var(--bg2);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;color:var(--text);font-size:.85rem;font-family:'Outfit',sans-serif;width:100%}
+.links-list{display:flex;flex-direction:column;gap:9px;margin-bottom:10px}
+.link-row{background:var(--bg3);border-radius:10px;padding:11px;display:grid;gap:7px}
+.link-row-top{display:grid;grid-template-columns:1fr auto auto auto;gap:7px;align-items:start}
+.link-row input,.link-row select{background:var(--bg4);border:1.5px solid transparent;border-radius:8px;padding:8px 10px;color:var(--text);font-size:.82rem;font-family:'Inter',sans-serif;width:100%;outline:none;transition:border-color .2s}
+.link-row input:focus,.link-row select:focus{border-color:var(--acc2)}
+.link-row select option{background:var(--bg3)}
 
 /* TMDB SEARCH */
-.tmdb-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px;max-height:300px;overflow-y:auto;margin-top:12px}
-.tmdb-result-item{cursor:pointer;border-radius:8px;overflow:hidden;background:var(--bg3);border:2px solid transparent;transition:all .2s}
-.tmdb-result-item:hover,.tmdb-result-item.selected{border-color:var(--accent)}
-.tmdb-result-item img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block}
-.tmdb-result-item .r-title{font-size:.65rem;padding:4px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tmdb-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;max-height:280px;overflow-y:auto;margin-top:10px}
+.tmdb-r{cursor:pointer;border-radius:8px;overflow:hidden;background:var(--bg3);border:2px solid transparent;transition:all .2s}
+.tmdb-r:hover,.tmdb-r.on{border-color:var(--acc2)}
+.tmdb-r img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block}
+.tmdb-r .r-ttl{font-size:.62rem;padding:4px 5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* SECTION DISPLAY */
-.section-view{display:none}.section-view.active{display:block}
+/* IPTV */
+.iptv-import-area{background:var(--bg3);border:1.5px dashed rgba(255,255,255,.1);border-radius:10px;padding:14px;margin-bottom:12px}
+.iptv-import-area textarea{width:100%;background:none;border:none;color:var(--text);font-family:'Inter',sans-serif;font-size:.8rem;resize:vertical;min-height:100px;outline:none}
+.iptv-import-area textarea::placeholder{color:var(--text3)}
+.ch-logo-preview{width:44px;height:44px;border-radius:8px;overflow:hidden;background:var(--bg3);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ch-logo-preview img{width:100%;height:100%;object-fit:contain}
+
+/* SECTION VIEWS */
+.sec-view{display:none}
+.sec-view.on{display:block}
+
+/* SEARCH BAR */
+.search-bar{display:flex;align-items:center;gap:9px;background:var(--bg3);border:1.5px solid transparent;border-radius:10px;padding:9px 13px;transition:border-color .2s;max-width:280px}
+.search-bar:focus-within{border-color:var(--acc2)}
+.search-bar svg{width:15px;height:15px;fill:var(--text3);flex-shrink:0}
+.search-bar input{flex:1;background:none;border:none;color:var(--text);font-size:.85rem;font-family:'Inter',sans-serif;outline:none;min-width:0}
+.search-bar input::placeholder{color:var(--text3)}
 </style>
 </head>
 <body>
 
 <!-- LOGIN -->
-<div id="login-screen">
-  <div class="login-box">
-    <div class="login-logo"><span class="red">Stream</span><span class="w">Flix</span> <span style="font-size:.8em;color:var(--text3)">Admin</span></div>
-    <div class="login-sub">Panel de Administración</div>
-    <div id="login-error" class="error-msg"></div>
-    <div class="form-group">
-      <label>URL del Backend</label>
-      <input type="text" id="p-url" value="http://localhost:5000" placeholder="https://streamflix.up.railway.app">
+<div id="s-login">
+  <div class="lc">
+    <div class="lf">
+      <div class="lf-logo"><span>Stream</span>Flix <span style="font-size:.8em;color:var(--text3);font-weight:600">Admin</span></div>
+      <div class="lf-sub">Panel de administración</div>
+      <div class="lf-err" id="lf-err"></div>
+      <div class="fi"><label>URL del Backend</label><input id="li-url" type="text" placeholder="http://localhost:5000" value="http://localhost:5000"></div>
+      <div class="fi"><label>Clave de Administrador</label><input id="li-key" type="password" placeholder="admin1234"></div>
+      <div class="fi"><label>API Key TMDB</label><input id="li-tmdb" type="text" placeholder="c605729151d15d09849a034e1aba962f"></div>
+      <div class="lf-btns">
+        <button class="btn-main btn-full" onclick="doLogin()">Ingresar →</button>
+      </div>
     </div>
-    <div class="form-group">
-      <label>Clave de Administrador</label>
-      <input type="password" id="p-key" placeholder="••••••••">
+    <div class="ld">
+      <div class="ld-ic">🛠</div>
+      <div class="ld-title">Panel Admin</div>
+      <div class="ld-list">
+        <div class="ld-item"><div class="ld-dot"></div>Gestión de usuarios</div>
+        <div class="ld-item"><div class="ld-dot"></div>Agregar películas y series</div>
+        <div class="ld-item"><div class="ld-dot"></div>Canales IPTV</div>
+        <div class="ld-item"><div class="ld-dot"></div>Búsqueda integrada TMDB</div>
+      </div>
     </div>
-    <div class="form-group">
-      <label>API Key de TMDB</label>
-      <input type="text" id="p-tmdb" placeholder="Tu API key de themoviedb.org">
-    </div>
-    <button class="btn btn-primary btn-full" onclick="doAdminLogin()">Ingresar</button>
   </div>
 </div>
 
 <!-- APP -->
 <div id="app">
   <div class="header">
-    <div class="header-logo"><span class="red">Stream</span>Flix Admin</div>
-    <div style="display:flex;align-items:center;gap:12px">
-      <div class="server-badge" id="server-badge"></div>
-      <button class="btn btn-ghost btn-sm" onclick="doAdminLogout()">Salir</button>
-    </div>
+    <div class="h-logo"><span>Stream</span>Flix Admin</div>
+    <div class="h-badge" id="h-badge">desconectado</div>
+    <div class="h-spacer"></div>
+    <button class="h-btn" onclick="doLogout()">Salir</button>
   </div>
   <div class="body-wrap">
     <div class="sidebar">
-      <div class="nav-item active" onclick="showSection('dashboard')">📊 Dashboard</div>
-      <div class="nav-item" onclick="showSection('users')">👥 Usuarios</div>
-      <div class="nav-item" onclick="showSection('movies')">🎬 Películas</div>
-      <div class="nav-item" onclick="showSection('series')">📺 Series</div>
+      <div class="nav-item on" onclick="showSec('dashboard')"><svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>Dashboard</div>
+      <div class="nav-item" onclick="showSec('users')"><svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>Usuarios</div>
+      <div class="nav-sep"></div>
+      <div class="nav-item" onclick="showSec('movies')"><svg viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>Películas</div>
+      <div class="nav-item" onclick="showSec('series')"><svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>Series</div>
+      <div class="nav-sep"></div>
+      <div class="nav-item" onclick="showSec('iptv')"><svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>IPTV</div>
     </div>
     <div class="main">
+
       <!-- DASHBOARD -->
-      <div id="sec-dashboard" class="section-view active">
+      <div id="sec-dashboard" class="sec-view on">
         <div class="stats-grid" id="stats-grid">
-          <div class="stat-card"><div class="stat-value" id="s-users">-</div><div class="stat-label">Usuarios Total</div></div>
-          <div class="stat-card"><div class="stat-value" id="s-active">-</div><div class="stat-label">Activos</div></div>
-          <div class="stat-card"><div class="stat-value" id="s-movies">-</div><div class="stat-label">Películas</div></div>
-          <div class="stat-card"><div class="stat-value" id="s-series">-</div><div class="stat-label">Series</div></div>
+          <div class="stat-card acc"><div class="stat-val" id="s-users">-</div><div class="stat-lbl">Usuarios</div></div>
+          <div class="stat-card"><div class="stat-val" id="s-active" style="color:var(--green)">-</div><div class="stat-lbl">Activos</div></div>
+          <div class="stat-card"><div class="stat-val" id="s-movies" style="color:var(--blue)">-</div><div class="stat-lbl">Películas</div></div>
+          <div class="stat-card"><div class="stat-val" id="s-series" style="color:var(--acc2)">-</div><div class="stat-lbl">Series</div></div>
+          <div class="stat-card"><div class="stat-val" id="s-iptv" style="color:var(--green)">-</div><div class="stat-lbl">Canales IPTV</div></div>
         </div>
-        <div class="table-header"><div class="table-title">Contenido reciente</div></div>
-        <div class="table-wrap"><table><thead><tr><th>Título</th><th>Tipo</th><th>Año</th><th>Links</th><th>Actualizado</th></tr></thead><tbody id="recent-tbody"></tbody></table></div>
+        <div class="tbl-hd"><div class="tbl-title">Contenido reciente</div></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Título</th><th>Tipo</th><th>Año</th><th>Links</th><th>Actualizado</th></tr></thead><tbody id="recent-tbody"></tbody></table></div>
       </div>
 
       <!-- USERS -->
-      <div id="sec-users" class="section-view">
-        <div class="table-header">
-          <div class="table-title">👥 Usuarios</div>
-          <button class="btn btn-primary" onclick="openUserModal()">+ Nuevo usuario</button>
+      <div id="sec-users" class="sec-view">
+        <div class="tbl-hd">
+          <div class="tbl-title">👥 Usuarios</div>
+          <button class="btn-main btn-sm" onclick="openUserModal()">+ Nuevo usuario</button>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Estado</th><th>Vencimiento</th><th>Creado</th><th>Acciones</th></tr></thead><tbody id="users-tbody"></tbody></table></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Estado</th><th>Vencimiento</th><th>Creado</th><th>Acciones</th></tr></thead><tbody id="users-tbody"></tbody></table></div>
       </div>
 
       <!-- MOVIES -->
-      <div id="sec-movies" class="section-view">
-        <div class="table-header">
-          <div class="table-title">🎬 Películas</div>
-          <button class="btn btn-primary" onclick="openContentModal('movie')">+ Agregar película</button>
+      <div id="sec-movies" class="sec-view">
+        <div class="tbl-hd">
+          <div class="tbl-title">🎬 Películas</div>
+          <button class="btn-main btn-sm" onclick="openContentModal('movie')">+ Agregar</button>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Título</th><th>Año</th><th>TMDB ID</th><th>Links</th><th>Actualizado</th><th>Acciones</th></tr></thead><tbody id="movies-tbody"></tbody></table></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Título</th><th>Año</th><th>TMDB ID</th><th>Links</th><th>Actualizado</th><th>Acciones</th></tr></thead><tbody id="movies-tbody"></tbody></table></div>
       </div>
 
       <!-- SERIES -->
-      <div id="sec-series" class="section-view">
-        <div class="table-header">
-          <div class="table-title">📺 Series</div>
-          <button class="btn btn-primary" onclick="openContentModal('tv')">+ Agregar serie</button>
+      <div id="sec-series" class="sec-view">
+        <div class="tbl-hd">
+          <div class="tbl-title">📺 Series</div>
+          <button class="btn-main btn-sm" onclick="openContentModal('tv')">+ Agregar</button>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Título</th><th>Año</th><th>TMDB ID</th><th>Links</th><th>Actualizado</th><th>Acciones</th></tr></thead><tbody id="series-tbody"></tbody></table></div>
+        <div class="tbl-wrap"><table><thead><tr><th>Título</th><th>Año</th><th>TMDB ID</th><th>Links</th><th>Actualizado</th><th>Acciones</th></tr></thead><tbody id="series-tbody"></tbody></table></div>
       </div>
+
+      <!-- IPTV -->
+      <div id="sec-iptv" class="sec-view">
+        <div class="tbl-hd">
+          <div class="tbl-title">📡 Canales IPTV</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-sec btn-sm" onclick="openImportModal()">📥 Importar M3U</button>
+            <button class="btn-main btn-sm" onclick="openIptvModal()">+ Agregar canal</button>
+          </div>
+        </div>
+        <div class="tbl-wrap"><table><thead><tr><th>Logo</th><th>Canal</th><th>Categoría</th><th>URL</th><th>Acciones</th></tr></thead><tbody id="iptv-tbody"></tbody></table></div>
+      </div>
+
     </div>
   </div>
 </div>
 
 <!-- USER MODAL -->
-<div class="modal-overlay hidden" id="user-modal">
+<div class="modal-ov" id="user-modal">
   <div class="modal">
     <div class="modal-title" id="user-modal-title">Nuevo usuario</div>
-    <div id="user-modal-error" class="error-msg"></div>
-    <div class="form-group"><label>Username</label><input type="text" id="um-username"></div>
-    <div class="form-group"><label>Nombre a mostrar</label><input type="text" id="um-display"></div>
-    <div class="form-group"><label>Contraseña</label><input type="password" id="um-pass"></div>
-    <div class="form-group"><label>Días de duración (vacío = sin vencimiento)</label><input type="number" id="um-days" placeholder="30"></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeUserModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveUser()">Crear usuario</button>
+    <div class="lf-err" id="user-err"></div>
+    <div class="fi"><label>Username</label><input type="text" id="um-usr"></div>
+    <div class="fi"><label>Nombre a mostrar</label><input type="text" id="um-name"></div>
+    <div class="fi"><label>Contraseña</label><input type="password" id="um-pw"></div>
+    <div class="fi"><label>Días de acceso (vacío = sin vencimiento)</label><input type="number" id="um-days" placeholder="30"></div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeModal('user-modal')">Cancelar</button>
+      <button class="btn-main" onclick="saveUser()">Crear usuario</button>
     </div>
   </div>
 </div>
 
 <!-- EXTEND MODAL -->
-<div class="modal-overlay hidden" id="extend-modal">
+<div class="modal-ov" id="ext-modal">
   <div class="modal">
     <div class="modal-title">Extender acceso</div>
-    <div class="form-group"><label>Días a agregar</label><input type="number" id="ext-days" value="30"></div>
-    <input type="hidden" id="ext-username">
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeExtend()">Cancelar</button>
-      <button class="btn btn-primary" onclick="doExtend()">Extender</button>
+    <input type="hidden" id="ext-usr">
+    <div class="fi"><label>Días a agregar</label><input type="number" id="ext-days" value="30"></div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeModal('ext-modal')">Cancelar</button>
+      <button class="btn-main" onclick="doExtend()">Extender</button>
     </div>
   </div>
 </div>
 
 <!-- CONTENT MODAL -->
-<div class="modal-overlay hidden" id="content-modal">
-  <div class="modal" style="max-width:680px">
-    <div class="modal-title" id="content-modal-title">Agregar contenido</div>
+<div class="modal-ov" id="content-modal">
+  <div class="modal" style="max-width:660px">
+    <div class="modal-title" id="cm-title">Agregar contenido</div>
     <input type="hidden" id="cm-type">
     <input type="hidden" id="cm-tmdb-id">
-    <div class="form-group">
+    <div class="fi">
       <label>Buscar en TMDB (nombre o ID)</label>
       <div style="display:flex;gap:8px">
-        <input type="text" id="cm-search" placeholder="Buscar..." onkeydown="if(event.key==='Enter')tmdbSearch()">
-        <button class="btn btn-ghost" onclick="tmdbSearch()">Buscar</button>
+        <input type="text" id="cm-search" placeholder="Buscar..." onkeydown="if(event.key==='Enter')tmdbSearch()" style="flex:1">
+        <button class="btn-sec" onclick="tmdbSearch()">Buscar</button>
       </div>
     </div>
     <div id="tmdb-results" class="tmdb-results" style="display:none"></div>
-    <div class="form-group" style="margin-top:16px"><label>Título</label><input type="text" id="cm-title" placeholder="Autocompletado al seleccionar"></div>
-    <div class="form-group"><label>Año</label><input type="text" id="cm-year"></div>
-    <div class="form-group"><label>Poster URL</label><input type="text" id="cm-poster"></div>
-    <div style="font-size:.85rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Links</div>
+    <div style="margin-top:14px">
+      <div class="fi"><label>Título</label><input type="text" id="cm-ttl" placeholder="Se autocompleta al seleccionar"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="fi"><label>Año</label><input type="text" id="cm-yr"></div>
+        <div class="fi"><label>TMDB ID</label><input type="text" id="cm-id-display" readonly></div>
+      </div>
+      <div class="fi"><label>Poster URL</label><input type="text" id="cm-poster"></div>
+    </div>
+    <div style="font-size:.72rem;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:9px">Links manuales</div>
     <div class="links-list" id="links-list"></div>
-    <button class="btn btn-ghost btn-sm" onclick="addLinkRow()">+ Agregar link</button>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeContentModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveContent()">Guardar</button>
+    <button class="btn-sec btn-sm" onclick="addLink()" style="margin-bottom:14px">+ Agregar link</button>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeModal('content-modal')">Cancelar</button>
+      <button class="btn-main" onclick="saveContent()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- IPTV CHANNEL MODAL -->
+<div class="modal-ov" id="iptv-modal">
+  <div class="modal">
+    <div class="modal-title" id="iptv-modal-title">Agregar canal IPTV</div>
+    <input type="hidden" id="iptv-ch-id">
+    <div class="fi"><label>Nombre del canal</label><input type="text" id="iptv-name" placeholder="ej: CNN en Español"></div>
+    <div class="fi"><label>URL del stream (M3U8, MP4, etc.)</label><input type="text" id="iptv-url" placeholder="https://..."></div>
+    <div class="fi"><label>URL del logo (opcional)</label><input type="text" id="iptv-logo" placeholder="https://logo.png" oninput="previewLogo()"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:13px">
+      <div class="ch-logo-preview" id="logo-preview"><svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:var(--text3)"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg></div>
+      <span style="font-size:.75rem;color:var(--text3)">Vista previa del logo</span>
+    </div>
+    <div class="fi"><label>Categoría</label><input type="text" id="iptv-cat" placeholder="ej: Noticias, Deportes, Entretenimiento" value="General"></div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeModal('iptv-modal')">Cancelar</button>
+      <button class="btn-main" onclick="saveIptv()">Guardar canal</button>
+    </div>
+  </div>
+</div>
+
+<!-- M3U IMPORT MODAL -->
+<div class="modal-ov" id="import-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title">📥 Importar lista M3U</div>
+    <div style="font-size:.8rem;color:var(--text2);margin-bottom:12px">Pegá el contenido de tu lista M3U o la URL de la lista.</div>
+    <div class="fi">
+      <label>URL de lista M3U (opcional)</label>
+      <input type="text" id="m3u-url" placeholder="https://lista.m3u">
+    </div>
+    <div style="font-size:.72rem;font-weight:700;color:var(--text3);margin-bottom:7px;text-transform:uppercase;letter-spacing:.5px">— o pegá el contenido M3U —</div>
+    <div class="iptv-import-area"><textarea id="m3u-text" placeholder="#EXTM3U&#10;#EXTINF:-1 tvg-logo=&quot;https://logo.png&quot; group-title=&quot;Noticias&quot;,CNN en Español&#10;https://stream.url/channel.m3u8"></textarea></div>
+    <div style="font-size:.75rem;color:var(--text3);margin-bottom:14px">Formato M3U estándar con #EXTINF soportado.</div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeModal('import-modal')">Cancelar</button>
+      <button class="btn-main" onclick="importM3U()">Importar canales</button>
     </div>
   </div>
 </div>
 
 <script>
-let _url='',_key='',_tmdbKey='';
+let _url='', _key='', _tmdb='';
 
-function doAdminLogin(){
-  const url=document.getElementById('p-url').value.trim().replace(/\/$/,'');
-  const key=document.getElementById('p-key').value.trim();
-  const tmdb=document.getElementById('p-tmdb').value.trim();
-  const err=document.getElementById('login-error');
-  err.style.display='none';
-  if(!url||!key){err.textContent='Completa los campos';err.style.display='block';return;}
-  fetch(`${url}/admin/users`,{headers:{'X-Admin-Key':key}})
-    .then(r=>{if(!r.ok)throw new Error('');return r.json();})
-    .then(()=>{
-      _url=url;_key=key;_tmdbKey=tmdb;
-      window._tmdbKey=tmdb;
-      localStorage.setItem('sf_tmdb_key',tmdb);
-      document.getElementById('login-screen').classList.add('hidden');
-      document.getElementById('app').classList.add('visible');
-      document.getElementById('server-badge').textContent=url.replace(/https?:\/\//,'');
-      loadDashboard();
-    })
-    .catch(()=>{err.textContent='No se pudo conectar o clave incorrecta';err.style.display='block';});
+// ── LOGIN ────────────────────────────────────────────
+async function doLogin(){
+  const url=document.getElementById('li-url').value.trim().replace(/\/$/,'');
+  const key=document.getElementById('li-key').value.trim();
+  const tmdb=document.getElementById('li-tmdb').value.trim();
+  const err=document.getElementById('lf-err');err.style.display='none';
+  if(!url||!key){err.textContent='Completá URL y clave';err.style.display='block';return;}
+  try{
+    const r=await fetch(`${url}/admin/users`,{headers:{'X-Admin-Key':key}});
+    if(!r.ok) throw new Error('');
+    await r.json();
+    _url=url;_key=key;_tmdb=tmdb;
+    localStorage.setItem('sf_tmdb_key',tmdb);
+    document.getElementById('s-login').classList.add('hide');
+    document.getElementById('app').classList.add('vis');
+    document.getElementById('h-badge').textContent=url.replace(/https?:\/\//,'');
+    loadDashboard();
+  }catch(e){err.textContent='Error: no se pudo conectar o clave incorrecta';err.style.display='block';}
 }
-function doAdminLogout(){
+function doLogout(){
   _url='';_key='';
-  document.getElementById('login-screen').classList.remove('hidden');
-  document.getElementById('app').classList.remove('visible');
+  document.getElementById('s-login').classList.remove('hide');
+  document.getElementById('app').classList.remove('vis');
 }
 
+// ── API ──────────────────────────────────────────────
 function api(path,opts={}){
   return fetch(`${_url}${path}`,{...opts,headers:{'X-Admin-Key':_key,'Content-Type':'application/json',...(opts.headers||{})}}).then(r=>r.json());
 }
 
-function showSection(s){
-  document.querySelectorAll('.section-view').forEach(el=>el.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
-  document.getElementById(`sec-${s}`).classList.add('active');
-  event.currentTarget.classList.add('active');
-  if(s==='dashboard')loadDashboard();
-  else if(s==='users')loadUsers();
-  else if(s==='movies')loadContent('movie');
-  else if(s==='series')loadContent('tv');
+// ── SECTIONS ─────────────────────────────────────────
+function showSec(sec){
+  document.querySelectorAll('.sec-view').forEach(v=>v.classList.remove('on'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('on'));
+  document.getElementById(`sec-${sec}`).classList.add('on');
+  event.currentTarget.classList.add('on');
+  if(sec==='dashboard') loadDashboard();
+  else if(sec==='users') loadUsers();
+  else if(sec==='movies') loadContent('movie');
+  else if(sec==='series') loadContent('tv');
+  else if(sec==='iptv') loadIptv();
 }
 
+// ── DASHBOARD ────────────────────────────────────────
 async function loadDashboard(){
-  const [users,content]=await Promise.all([api('/admin/users'),api('/admin/content')]);
+  const [users,content,iptv]=await Promise.all([api('/admin/users'),api('/admin/content'),api('/admin/iptv')]);
   document.getElementById('s-users').textContent=users.length||0;
-  document.getElementById('s-active').textContent=users.filter(u=>u.active).length||0;
+  document.getElementById('s-active').textContent=(users.filter(u=>u.active&&(!u.expires||new Date(u.expires)>new Date()))).length||0;
   const movies=content.filter(c=>c.type==='movie');
   const series=content.filter(c=>c.type==='tv');
-  document.getElementById('s-movies').textContent=movies.length;
-  document.getElementById('s-series').textContent=series.length;
-  const recent=content.slice(0,10);
+  document.getElementById('s-movies').textContent=movies.length||0;
+  document.getElementById('s-series').textContent=series.length||0;
+  document.getElementById('s-iptv').textContent=(iptv.channels||[]).length||0;
+  const recent=content.slice(0,12);
   document.getElementById('recent-tbody').innerHTML=recent.map(c=>`<tr>
-    <td>${c.title}</td>
-    <td>${c.type==='movie'?'🎬 Película':'📺 Serie'}</td>
+    <td><strong>${c.title||'-'}</strong></td>
+    <td><span class="badge ${c.type==='movie'?'b-blue':'b-purple'}">${c.type==='movie'?'Película':'Serie'}</span></td>
     <td>${c.year||'-'}</td>
-    <td>${(c.links||[]).length}</td>
-    <td>${c.updated?c.updated.slice(0,10):'-'}</td>
+    <td><span class="badge b-green">${(c.links||[]).length}</span></td>
+    <td style="color:var(--text3)">${c.updated?c.updated.slice(0,10):'-'}</td>
   </tr>`).join('');
 }
 
+// ── USERS ────────────────────────────────────────────
 async function loadUsers(){
   const users=await api('/admin/users');
   document.getElementById('users-tbody').innerHTML=users.map(u=>{
     const exp=u.expires?new Date(u.expires):null;
     const now=new Date();
     const expired=exp&&exp<now;
-    const badge=!u.active?'<span class="badge badge-red">Inactivo</span>':expired?'<span class="badge badge-orange">Vencido</span>':'<span class="badge badge-green">Activo</span>';
+    const badge=!u.active?'<span class="badge b-red">Inactivo</span>':expired?'<span class="badge b-orange">Vencido</span>':'<span class="badge b-green">Activo</span>';
     return`<tr>
       <td><strong>${u.username}</strong></td>
       <td>${u.display_name||u.username}</td>
       <td>${badge}</td>
-      <td>${exp?exp.toLocaleDateString('es-AR'):'Sin vencimiento'}</td>
-      <td>${u.created?u.created.slice(0,10):'-'}</td>
+      <td style="color:var(--text3)">${exp?exp.toLocaleDateString('es-AR'):'Sin vencimiento'}</td>
+      <td style="color:var(--text3)">${u.created?u.created.slice(0,10):'-'}</td>
       <td><div class="actions">
-        <button class="btn btn-ghost btn-sm" onclick="toggleUser('${u.username}')">${u.active?'Desactivar':'Activar'}</button>
-        <button class="btn btn-ghost btn-sm" onclick="openExtend('${u.username}')">+Días</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')">Borrar</button>
+        <button class="btn-sec btn-sm" onclick="toggleUser('${u.username}')">${u.active?'Desact.':'Activar'}</button>
+        <button class="btn-sec btn-sm" onclick="openExtend('${u.username}')">+Días</button>
+        <button class="btn-danger btn-sm" onclick="deleteUser('${u.username}')">Borrar</button>
       </div></td>
     </tr>`;
   }).join('');
 }
 
 function openUserModal(){
-  document.getElementById('um-username').value='';
-  document.getElementById('um-display').value='';
-  document.getElementById('um-pass').value='';
-  document.getElementById('um-days').value='';
-  document.getElementById('user-modal-error').style.display='none';
-  openM('user-modal');
+  ['um-usr','um-name','um-pw','um-days'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('user-err').style.display='none';
+  openModal('user-modal');
 }
-function closeUserModal(){closeM('user-modal');}
 async function saveUser(){
-  const username=document.getElementById('um-username').value.trim();
-  const display_name=document.getElementById('um-display').value.trim();
-  const password=document.getElementById('um-pass').value;
+  const usr=document.getElementById('um-usr').value.trim();
+  const name=document.getElementById('um-name').value.trim();
+  const pw=document.getElementById('um-pw').value;
   const days=document.getElementById('um-days').value;
-  const err=document.getElementById('user-modal-error');
-  err.style.display='none';
-  if(!username||!password){err.textContent='Usuario y contraseña requeridos';err.style.display='block';return;}
-  const r=await api('/admin/users',{method:'POST',body:JSON.stringify({username,display_name,password,days:days?parseInt(days):null})});
-  if(r.success){closeUserModal();loadUsers();}
+  const err=document.getElementById('user-err');err.style.display='none';
+  if(!usr||!pw){err.textContent='Usuario y contraseña requeridos';err.style.display='block';return;}
+  const r=await api('/admin/users',{method:'POST',body:JSON.stringify({username:usr,display_name:name,password:pw,days:days?parseInt(days):null})});
+  if(r.success){closeModal('user-modal');loadUsers();}
   else{err.textContent=r.error||'Error';err.style.display='block';}
 }
-
-async function toggleUser(u){
-  await api(`/admin/users/${u}/toggle`,{method:'POST',body:'{}'});
-  loadUsers();
-}
-async function deleteUser(u){
-  if(!confirm(`¿Borrar usuario ${u}?`))return;
-  await api(`/admin/users/${u}`,{method:'DELETE'});
-  loadUsers();
-}
-function openExtend(u){
-  document.getElementById('ext-username').value=u;
-  document.getElementById('ext-days').value=30;
-  openM('extend-modal');
-}
-function closeExtend(){closeM('extend-modal');}
+async function toggleUser(usr){await api(`/admin/users/${usr}/toggle`,{method:'POST',body:'{}'});loadUsers();}
+async function deleteUser(usr){if(!confirm(`¿Borrar usuario ${usr}?`))return;await api(`/admin/users/${usr}`,{method:'DELETE'});loadUsers();}
+function openExtend(usr){document.getElementById('ext-usr').value=usr;document.getElementById('ext-days').value=30;openModal('ext-modal');}
 async function doExtend(){
-  const u=document.getElementById('ext-username').value;
+  const usr=document.getElementById('ext-usr').value;
   const days=parseInt(document.getElementById('ext-days').value)||30;
-  await api(`/admin/users/${u}/extend`,{method:'POST',body:JSON.stringify({days})});
-  closeExtend();loadUsers();
+  await api(`/admin/users/${usr}/extend`,{method:'POST',body:JSON.stringify({days})});
+  closeModal('ext-modal');loadUsers();
 }
 
-// CONTENT
+// ── CONTENT ──────────────────────────────────────────
 async function loadContent(type){
   const all=await api('/admin/content');
   const items=all.filter(c=>c.type===type);
-  const tbodyId=type==='movie'?'movies-tbody':'series-tbody';
-  document.getElementById(tbodyId).innerHTML=items.map(c=>`<tr>
-    <td><strong>${c.title}</strong></td>
+  const tbody=document.getElementById(type==='movie'?'movies-tbody':'series-tbody');
+  tbody.innerHTML=items.map(c=>`<tr>
+    <td><strong>${c.title||'-'}</strong></td>
     <td>${c.year||'-'}</td>
-    <td>${c.tmdb_id}</td>
-    <td>${(c.links||[]).length}</td>
-    <td>${c.updated?c.updated.slice(0,10):'-'}</td>
+    <td><span class="badge b-purple">${c.tmdb_id}</span></td>
+    <td><span class="badge b-green">${(c.links||[]).length}</span></td>
+    <td style="color:var(--text3)">${c.updated?c.updated.slice(0,10):'-'}</td>
     <td><div class="actions">
-      <button class="btn btn-ghost btn-sm" onclick="editContent('${type}','${c.tmdb_id}')">Editar</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteContent('${type}','${c.tmdb_id}')">Borrar</button>
+      <button class="btn-sec btn-sm" onclick="editContent('${type}','${c.tmdb_id}')">Editar</button>
+      <button class="btn-danger btn-sm" onclick="deleteContent('${type}','${c.tmdb_id}')">Borrar</button>
     </div></td>
   </tr>`).join('');
 }
 
-let _editLinks=[];
+let _links=[];
 function openContentModal(type,item=null){
   document.getElementById('cm-type').value=type;
   document.getElementById('cm-tmdb-id').value='';
-  document.getElementById('cm-title').value='';
-  document.getElementById('cm-year').value='';
+  document.getElementById('cm-ttl').value='';
+  document.getElementById('cm-yr').value='';
   document.getElementById('cm-poster').value='';
+  document.getElementById('cm-id-display').value='';
   document.getElementById('cm-search').value='';
   document.getElementById('tmdb-results').style.display='none';
   document.getElementById('tmdb-results').innerHTML='';
-  document.getElementById('content-modal-title').textContent=`Agregar ${type==='movie'?'Película':'Serie'}`;
-  _editLinks=[];
-  renderLinks();
+  document.getElementById('cm-title').textContent=`Agregar ${type==='movie'?'Película':'Serie'}`;
+  _links=[];renderLinks();
   if(item){
     document.getElementById('cm-tmdb-id').value=item.tmdb_id;
-    document.getElementById('cm-title').value=item.title;
-    document.getElementById('cm-year').value=item.year;
+    document.getElementById('cm-id-display').value=item.tmdb_id;
+    document.getElementById('cm-ttl').value=item.title;
+    document.getElementById('cm-yr').value=item.year;
     document.getElementById('cm-poster').value=item.poster;
-    _editLinks=item.links||[];
-    renderLinks();
-    document.getElementById('content-modal-title').textContent=`Editar: ${item.title}`;
+    _links=item.links||[];renderLinks();
+    document.getElementById('cm-title').textContent=`Editar: ${item.title}`;
   }
-  openM('content-modal');
+  openModal('content-modal');
 }
-function closeContentModal(){closeM('content-modal');}
-
-async function editContent(type,id){
-  const item=await api(`/admin/content/${type}/${id}`);
-  openContentModal(type,item);
-}
+async function editContent(type,id){const item=await api(`/admin/content/${type}/${id}`);openContentModal(type,item);}
 async function deleteContent(type,id){
   if(!confirm('¿Borrar este contenido?'))return;
-  await api(`/admin/content/${type}/${id}`,{method:'DELETE'});
-  loadContent(type);
+  await api(`/admin/content/${type}/${id}`,{method:'DELETE'});loadContent(type);
 }
 
 async function tmdbSearch(){
   const q=document.getElementById('cm-search').value.trim();
   const type=document.getElementById('cm-type').value;
-  if(!q)return;
   const tmdbType=type==='movie'?'movie':'tv';
+  if(!q)return;
   let url;
   if(/^\d+$/.test(q)){
-    url=`https://api.themoviedb.org/3/${tmdbType}/${q}?api_key=${_tmdbKey}&language=es-AR`;
+    url=`https://api.themoviedb.org/3/${tmdbType}/${q}?api_key=${_tmdb}&language=es-AR`;
     const r=await fetch(url).then(x=>x.json());
-    const results=[r].filter(x=>x.id);
-    showTmdbResults(results,tmdbType);
+    showTmdbResults([r].filter(x=>x.id),tmdbType);
   }else{
-    url=`https://api.themoviedb.org/3/search/${tmdbType}?api_key=${_tmdbKey}&language=es-AR&query=${encodeURIComponent(q)}`;
+    url=`https://api.themoviedb.org/3/search/${tmdbType}?api_key=${_tmdb}&language=es-AR&query=${encodeURIComponent(q)}`;
     const r=await fetch(url).then(x=>x.json());
     showTmdbResults(r.results||[],tmdbType);
   }
 }
-
 function showTmdbResults(results,type){
   const el=document.getElementById('tmdb-results');
   el.style.display='grid';
   el.innerHTML=results.slice(0,12).map(r=>{
     const poster=r.poster_path?`https://image.tmdb.org/t/p/w185${r.poster_path}`:'';
     const title=r.title||r.name||'';
-    return`<div class="tmdb-result-item" onclick="selectTmdb(${r.id},'${encodeURIComponent(title)}','${(r.release_date||r.first_air_date||'').slice(0,4)}','${poster}')">
-      ${poster?`<img src="${poster}" alt="${title}">`:'<div style="aspect-ratio:2/3;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:1.5rem">🎬</div>'}
-      <div class="r-title">${title}</div>
+    const yr=(r.release_date||r.first_air_date||'').slice(0,4);
+    return`<div class="tmdb-r" onclick="selectTmdb(${r.id},'${encodeURIComponent(title)}','${yr}','${poster}','${r.poster_path||''}')">
+      ${poster?`<img src="${poster}" alt="${title}">`:`<div style="aspect-ratio:2/3;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:1.5rem">🎬</div>`}
+      <div class="r-ttl">${title} ${yr?`(${yr})`:''}</div>
     </div>`;
   }).join('');
 }
-
-function selectTmdb(id,title,year,poster){
-  document.querySelectorAll('.tmdb-result-item').forEach(el=>el.classList.remove('selected'));
-  event.currentTarget.classList.add('selected');
+function selectTmdb(id,title,yr,poster,posterPath){
+  document.querySelectorAll('.tmdb-r').forEach(el=>el.classList.remove('on'));
+  event.currentTarget.classList.add('on');
   document.getElementById('cm-tmdb-id').value=id;
-  document.getElementById('cm-title').value=decodeURIComponent(title);
-  document.getElementById('cm-year').value=year;
-  document.getElementById('cm-poster').value=poster;
+  document.getElementById('cm-id-display').value=id;
+  document.getElementById('cm-ttl').value=decodeURIComponent(title);
+  document.getElementById('cm-yr').value=yr;
+  if(posterPath) document.getElementById('cm-poster').value=`https://image.tmdb.org/t/p/w342${posterPath}`;
 }
 
-function addLinkRow(lnk={}){
-  _editLinks.push({name:lnk.name||'',quality:lnk.quality||'1080p',lang:lnk.lang||'Latino',url:lnk.url||''});
-  renderLinks();
-}
-function removeLink(i){_editLinks.splice(i,1);renderLinks();}
+function addLink(lnk={}){_links.push({name:lnk.name||'',quality:lnk.quality||'1080p',lang:lnk.lang||'Latino',url:lnk.url||''});renderLinks();}
+function removeLink(i){_links.splice(i,1);renderLinks();}
 function renderLinks(){
-  document.getElementById('links-list').innerHTML=_editLinks.map((lnk,i)=>`
+  document.getElementById('links-list').innerHTML=_links.map((lnk,i)=>`
     <div class="link-row">
-      <input type="text" placeholder="Nombre" value="${lnk.name}" onchange="_editLinks[${i}].name=this.value">
-      <select onchange="_editLinks[${i}].quality=this.value">
-        ${['4K','1080p','720p','480p','HD','SD'].map(q=>`<option ${lnk.quality===q?'selected':''}>${q}</option>`).join('')}
-      </select>
-      <select onchange="_editLinks[${i}].lang=this.value">
-        ${['Latino','Español','Subtitulado','Inglés'].map(l=>`<option ${lnk.lang===l?'selected':''}>${l}</option>`).join('')}
-      </select>
-      <button class="btn btn-danger btn-sm" onclick="removeLink(${i})">✕</button>
-      <input type="text" placeholder="URL del link" value="${lnk.url}" onchange="_editLinks[${i}].url=this.value" style="grid-column:1/-1">
+      <div class="link-row-top">
+        <input type="text" placeholder="Nombre del servidor" value="${lnk.name||''}" onchange="_links[${i}].name=this.value">
+        <select onchange="_links[${i}].quality=this.value">
+          ${['4K','1080p','720p','480p','HD','SD'].map(q=>`<option ${lnk.quality===q?'selected':''}>${q}</option>`).join('')}
+        </select>
+        <select onchange="_links[${i}].lang=this.value">
+          ${['Latino','Español','Subtitulado','Inglés','Original'].map(l=>`<option ${lnk.lang===l?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <button class="btn-danger btn-sm" onclick="removeLink(${i})" style="white-space:nowrap">✕</button>
+      </div>
+      <input type="text" placeholder="URL del stream" value="${lnk.url||''}" onchange="_links[${i}].url=this.value">
     </div>`).join('');
 }
 
 async function saveContent(){
   const type=document.getElementById('cm-type').value;
   const tmdb_id=document.getElementById('cm-tmdb-id').value;
-  const title=document.getElementById('cm-title').value;
-  const year=document.getElementById('cm-year').value;
+  const title=document.getElementById('cm-ttl').value;
+  const year=document.getElementById('cm-yr').value;
   const poster=document.getElementById('cm-poster').value;
-  if(!tmdb_id||!title){alert('Selecciona un título de TMDB');return;}
-  await api('/admin/content',{method:'POST',body:JSON.stringify({tmdb_id,type,title,year,poster,links:_editLinks})});
-  closeContentModal();
-  loadContent(type);
+  if(!tmdb_id||!title){alert('Seleccioná un título de TMDB primero');return;}
+  await api('/admin/content',{method:'POST',body:JSON.stringify({tmdb_id,type,title,year,poster,links:_links})});
+  closeModal('content-modal');loadContent(type);
 }
 
-// MODAL HELPERS
-function openM(id){
-  const o=document.getElementById(id);
-  o.classList.remove('hidden');
-  setTimeout(()=>o.classList.add('open'),10);
+// ── IPTV ─────────────────────────────────────────────
+async function loadIptv(){
+  const data=await api('/admin/iptv');
+  const channels=data.channels||[];
+  document.getElementById('iptv-tbody').innerHTML=channels.map(ch=>`<tr>
+    <td><div style="width:38px;height:38px;border-radius:8px;overflow:hidden;background:var(--bg3);display:flex;align-items:center;justify-content:center">
+      ${ch.logo?`<img src="${ch.logo}" style="width:100%;height:100%;object-fit:contain" onerror="this.style.display='none'">`:'<svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:var(--text3)"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>'}
+    </div></td>
+    <td><strong>${ch.name||'-'}</strong></td>
+    <td><span class="badge b-purple">${ch.category||'General'}</span></td>
+    <td style="color:var(--text3);font-size:.75rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ch.url||'-'}</td>
+    <td><div class="actions">
+      <button class="btn-sec btn-sm" onclick="editIptv('${ch.id}')">Editar</button>
+      <button class="btn-danger btn-sm" onclick="deleteIptv('${ch.id}')">Borrar</button>
+    </div></td>
+  </tr>`).join('')||'<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text3)">Sin canales. Agregá uno o importá una lista M3U.</td></tr>';
 }
-function closeM(id){
-  const o=document.getElementById(id);
-  o.classList.remove('open');
-  setTimeout(()=>o.classList.add('hidden'),300);
+
+function openIptvModal(ch=null){
+  document.getElementById('iptv-ch-id').value='';
+  document.getElementById('iptv-name').value='';
+  document.getElementById('iptv-url').value='';
+  document.getElementById('iptv-logo').value='';
+  document.getElementById('iptv-cat').value='General';
+  document.getElementById('logo-preview').innerHTML='<svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:var(--text3)"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>';
+  document.getElementById('iptv-modal-title').textContent='Agregar canal IPTV';
+  if(ch){
+    document.getElementById('iptv-ch-id').value=ch.id||'';
+    document.getElementById('iptv-name').value=ch.name||'';
+    document.getElementById('iptv-url').value=ch.url||'';
+    document.getElementById('iptv-logo').value=ch.logo||'';
+    document.getElementById('iptv-cat').value=ch.category||'General';
+    document.getElementById('iptv-modal-title').textContent=`Editar: ${ch.name}`;
+    if(ch.logo) document.getElementById('logo-preview').innerHTML=`<img src="${ch.logo}" style="width:100%;height:100%;object-fit:contain">`;
+  }
+  openModal('iptv-modal');
 }
+function previewLogo(){
+  const url=document.getElementById('iptv-logo').value.trim();
+  const prev=document.getElementById('logo-preview');
+  if(url){prev.innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:contain" onerror="this.parentNode.innerHTML='❌'">`;}
+  else{prev.innerHTML='<svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:var(--text3)"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>';}
+}
+async function saveIptv(){
+  const id=document.getElementById('iptv-ch-id').value;
+  const name=document.getElementById('iptv-name').value.trim();
+  const url=document.getElementById('iptv-url').value.trim();
+  const logo=document.getElementById('iptv-logo').value.trim();
+  const category=document.getElementById('iptv-cat').value.trim()||'General';
+  if(!name||!url){alert('Nombre y URL requeridos');return;}
+  if(id){await api(`/admin/iptv/${id}`,{method:'PUT',body:JSON.stringify({name,url,logo,category})});}
+  else{await api('/admin/iptv',{method:'POST',body:JSON.stringify({name,url,logo,category})});}
+  closeModal('iptv-modal');loadIptv();loadDashboard();
+}
+async function editIptv(id){
+  const data=await api('/admin/iptv');
+  const ch=(data.channels||[]).find(c=>c.id===id);
+  if(ch) openIptvModal(ch);
+}
+async function deleteIptv(id){
+  if(!confirm('¿Borrar este canal?'))return;
+  await api(`/admin/iptv/${id}`,{method:'DELETE'});loadIptv();loadDashboard();
+}
+function openImportModal(){document.getElementById('m3u-url').value='';document.getElementById('m3u-text').value='';openModal('import-modal');}
+async function importM3U(){
+  let m3u=document.getElementById('m3u-text').value.trim();
+  const m3uUrl=document.getElementById('m3u-url').value.trim();
+  if(m3uUrl&&!m3u){
+    try{const r=await fetch(m3uUrl);m3u=await r.text();}catch(e){alert('No se pudo descargar la lista M3U');return;}
+  }
+  if(!m3u){alert('Pegá contenido M3U o ingresá una URL');return;}
+  const r=await api('/admin/iptv/import',{method:'POST',body:JSON.stringify({m3u})});
+  closeModal('import-modal');
+  if(r.success){alert(`✅ ${r.added} canales importados`);loadIptv();loadDashboard();}
+  else alert('Error al importar');
+}
+
+// ── MODALS ───────────────────────────────────────────
+function openModal(id){
+  const o=document.getElementById(id);o.classList.add('vis');
+  document.addEventListener('keydown',escModal);
+}
+function closeModal(id){
+  document.getElementById(id).classList.remove('vis');
+  document.removeEventListener('keydown',escModal);
+}
+function escModal(e){if(e.key==='Escape') document.querySelectorAll('.modal-ov.vis').forEach(m=>m.classList.remove('vis'));}
+document.addEventListener('click',e=>{if(e.target.classList.contains('modal-ov')) e.target.classList.remove('vis');});
 </script>
 </body>
 </html>
