@@ -1,0 +1,7 @@
+{
+  "appId": "com.streamflix.app",
+  "appName": "StreamFlix",
+  "webDir": "www",
+  "server": { "androidScheme": "http" },
+  "android": { "allowMixedContent": true }
+}

@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StreamFlix Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0f;--bg2:#12121a;--bg3:#1a1a26;--accent:#7c3aed;--accent2:#9f67ff;--red:#e50914;--text:#f0f0f8;--text2:#a0a0c0;--text3:#60607a;--gold:#f5c518;--green:#22c55e;--orange:#f97316}
+body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;min-height:100vh}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:var(--accent);border-radius:4px}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:999;padding:20px}
+#login-screen.hidden{display:none}
+.login-box{background:var(--bg2);border:1px solid rgba(255,255,255,.07);border-radius:20px;padding:48px 40px;width:100%;max-width:420px}
+.login-logo{font-size:1.6rem;font-weight:900;margin-bottom:6px;text-align:center}
+.login-logo .red{color:var(--red)}.login-logo .w{color:var(--text)}
+.login-sub{text-align:center;color:var(--text3);font-size:.85rem;margin-bottom:32px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:.8rem;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.form-group input,.form-group select{width:100%;background:var(--bg3);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;color:var(--text);font-size:.95rem;font-family:'Outfit',sans-serif;transition:border-color .2s}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--accent)}
+.btn{padding:11px 20px;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;border:none;font-family:'Outfit',sans-serif;transition:all .2s}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-danger{background:rgba(229,9,20,.15);color:#ff6b6b;border:1px solid rgba(229,9,20,.3)}
+.btn-danger:hover{background:rgba(229,9,20,.25)}
+.btn-success{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+.btn-ghost{background:var(--bg3);color:var(--text2);border:1px solid rgba(255,255,255,.07)}
+.btn-ghost:hover{background:var(--bg2)}
+.btn-sm{padding:6px 14px;font-size:.8rem;border-radius:8px}
+.btn-full{width:100%;margin-top:8px}
+.error-msg{background:rgba(229,9,20,.15);border:1px solid rgba(229,9,20,.3);color:#ff6b6b;border-radius:8px;padding:10px 14px;font-size:.85rem;margin-bottom:12px;display:none}
+
+/* LAYOUT */
+#app{display:none;min-height:100vh}
+#app.visible{display:flex;flex-direction:column}
+.header{background:var(--bg2);border-bottom:1px solid rgba(255,255,255,.06);padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header-logo{font-size:1.1rem;font-weight:800}.header-logo .red{color:var(--red)}
+.server-badge{font-size:.75rem;background:rgba(124,58,237,.2);color:var(--accent2);border:1px solid rgba(124,58,237,.3);border-radius:20px;padding:4px 12px}
+.body-wrap{display:flex;flex:1}
+.sidebar{width:220px;background:var(--bg2);border-right:1px solid rgba(255,255,255,.06);padding:16px 0;flex-shrink:0;position:sticky;top:60px;height:calc(100vh - 60px)}
+.nav-item{display:flex;align-items:center;gap:12px;padding:12px 20px;cursor:pointer;transition:all .2s;font-size:.9rem;font-weight:600}
+.nav-item:hover,.nav-item.active{background:rgba(124,58,237,.15);color:var(--accent2)}
+.main{flex:1;padding:28px;overflow:hidden}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:28px}
+.stat-card{background:var(--bg2);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:20px}
+.stat-value{font-size:2rem;font-weight:800;margin-bottom:4px}
+.stat-label{font-size:.8rem;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+
+/* TABLE */
+.table-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.table-title{font-size:1.1rem;font-weight:700}
+.table-wrap{background:var(--bg2);border:1px solid rgba(255,255,255,.06);border-radius:14px;overflow:hidden;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:600px}
+th{padding:12px 16px;text-align:left;font-size:.75rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,.06)}
+td{padding:12px 16px;font-size:.85rem;border-bottom:1px solid rgba(255,255,255,.04)}
+tr:last-child td{border-bottom:none}
+.badge{display:inline-flex;align-items:center;border-radius:6px;padding:3px 10px;font-size:.72rem;font-weight:700}
+.badge-green{background:rgba(34,197,94,.15);color:var(--green)}
+.badge-red{background:rgba(229,9,20,.15);color:#ff6b6b}
+.badge-orange{background:rgba(249,115,22,.15);color:var(--orange)}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(8px);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;transition:opacity .3s}
+.modal-overlay.open{opacity:1}
+.modal-overlay.hidden{display:none}
+.modal{background:var(--bg2);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:28px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;transform:translateY(20px);transition:transform .3s}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-title{font-size:1.1rem;font-weight:700;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.06)}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06)}
+
+/* LINKS SECTION */
+.links-list{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.link-row{background:var(--bg3);border-radius:10px;padding:12px;display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:start}
+.link-row input,.link-row select{background:var(--bg2);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;color:var(--text);font-size:.85rem;font-family:'Outfit',sans-serif;width:100%}
+
+/* TMDB SEARCH */
+.tmdb-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px;max-height:300px;overflow-y:auto;margin-top:12px}
+.tmdb-result-item{cursor:pointer;border-radius:8px;overflow:hidden;background:var(--bg3);border:2px solid transparent;transition:all .2s}
+.tmdb-result-item:hover,.tmdb-result-item.selected{border-color:var(--accent)}
+.tmdb-result-item img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block}
+.tmdb-result-item .r-title{font-size:.65rem;padding:4px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* SECTION DISPLAY */
+.section-view{display:none}.section-view.active{display:block}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo"><span class="red">Stream</span><span class="w">Flix</span> <span style="font-size:.8em;color:var(--text3)">Admin</span></div>
+    <div class="login-sub">Panel de Administración</div>
+    <div id="login-error" class="error-msg"></div>
+    <div class="form-group">
+      <label>URL del Backend</label>
+      <input type="text" id="p-url" value="http://localhost:5000" placeholder="https://streamflix.up.railway.app">
+    </div>
+    <div class="form-group">
+      <label>Clave de Administrador</label>
+      <input type="password" id="p-key" placeholder="••••••••">
+    </div>
+    <div class="form-group">
+      <label>API Key de TMDB</label>
+      <input type="text" id="p-tmdb" placeholder="Tu API key de themoviedb.org">
+    </div>
+    <button class="btn btn-primary btn-full" onclick="doAdminLogin()">Ingresar</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="header">
+    <div class="header-logo"><span class="red">Stream</span>Flix Admin</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="server-badge" id="server-badge"></div>
+      <button class="btn btn-ghost btn-sm" onclick="doAdminLogout()">Salir</button>
+    </div>
+  </div>
+  <div class="body-wrap">
+    <div class="sidebar">
+      <div class="nav-item active" onclick="showSection('dashboard')">📊 Dashboard</div>
+      <div class="nav-item" onclick="showSection('users')">👥 Usuarios</div>
+      <div class="nav-item" onclick="showSection('movies')">🎬 Películas</div>
+      <div class="nav-item" onclick="showSection('series')">📺 Series</div>
+    </div>
+    <div class="main">
+      <!-- DASHBOARD -->
+      <div id="sec-dashboard" class="section-view active">
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card"><div class="stat-value" id="s-users">-</div><div class="stat-label">Usuarios Total</div></div>
+          <div class="stat-card"><div class="stat-value" id="s-active">-</div><div class="stat-label">Activos</div></div>
+          <div class="stat-card"><div class="stat-value" id="s-movies">-</div><div class="stat-label">Películas</div></div>
+          <div class="stat-card"><div class="stat-value" id="s-series">-</div><div class="stat-label">Series</div></div>
+        </div>
+        <div class="table-header"><div class="table-title">Contenido reciente</div></div>
+        <div class="table-wrap"><table><thead><tr><th>Título</th><th>Tipo</th><th>Año</th><th>Links</th><th>Actualizado</th></tr></thead><tbody id="recent-tbody"></tbody></table></div>
+      </div>
+
+      <!-- USERS -->
+      <div id="sec-users" class="section-view">
+        <div class="table-header">
+          <div class="table-title">👥 Usuarios</div>
+          <button class="btn btn-primary" onclick="openUserModal()">+ Nuevo usuario</button>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Estado</th><th>Vencimiento</th><th>Creado</th><th>Acciones</th></tr></thead><tbody id="users-tbody"></tbody></table></div>
+      </div>
+
+      <!-- MOVIES -->
+      <div id="sec-movies" class="section-view">
+        <div class="table-header">
+          <div class="table-title">🎬 Películas</div>
+          <button class="btn btn-primary" onclick="openContentModal('movie')">+ Agregar película</button>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Título</th><th>Año</th><th>TMDB ID</th><th>Links</th><th>Actualizado</th><th>Acciones</th></tr></thead><tbody id="movies-tbody"></tbody></table></div>
+      </div>
+
+      <!-- SERIES -->
+      <div id="sec-series" class="section-view">
+        <div class="table-header">
+          <div class="table-title">📺 Series</div>
+          <button class="btn btn-primary" onclick="openContentModal('tv')">+ Agregar serie</button>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Título</th><th>Año</th><th>TMDB ID</th><th>Links</th><th>Actualizado</th><th>Acciones</th></tr></thead><tbody id="series-tbody"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- USER MODAL -->
+<div class="modal-overlay hidden" id="user-modal">
+  <div class="modal">
+    <div class="modal-title" id="user-modal-title">Nuevo usuario</div>
+    <div id="user-modal-error" class="error-msg"></div>
+    <div class="form-group"><label>Username</label><input type="text" id="um-username"></div>
+    <div class="form-group"><label>Nombre a mostrar</label><input type="text" id="um-display"></div>
+    <div class="form-group"><label>Contraseña</label><input type="password" id="um-pass"></div>
+    <div class="form-group"><label>Días de duración (vacío = sin vencimiento)</label><input type="number" id="um-days" placeholder="30"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeUserModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveUser()">Crear usuario</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXTEND MODAL -->
+<div class="modal-overlay hidden" id="extend-modal">
+  <div class="modal">
+    <div class="modal-title">Extender acceso</div>
+    <div class="form-group"><label>Días a agregar</label><input type="number" id="ext-days" value="30"></div>
+    <input type="hidden" id="ext-username">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeExtend()">Cancelar</button>
+      <button class="btn btn-primary" onclick="doExtend()">Extender</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONTENT MODAL -->
+<div class="modal-overlay hidden" id="content-modal">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-title" id="content-modal-title">Agregar contenido</div>
+    <input type="hidden" id="cm-type">
+    <input type="hidden" id="cm-tmdb-id">
+    <div class="form-group">
+      <label>Buscar en TMDB (nombre o ID)</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="cm-search" placeholder="Buscar..." onkeydown="if(event.key==='Enter')tmdbSearch()">
+        <button class="btn btn-ghost" onclick="tmdbSearch()">Buscar</button>
+      </div>
+    </div>
+    <div id="tmdb-results" class="tmdb-results" style="display:none"></div>
+    <div class="form-group" style="margin-top:16px"><label>Título</label><input type="text" id="cm-title" placeholder="Autocompletado al seleccionar"></div>
+    <div class="form-group"><label>Año</label><input type="text" id="cm-year"></div>
+    <div class="form-group"><label>Poster URL</label><input type="text" id="cm-poster"></div>
+    <div style="font-size:.85rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Links</div>
+    <div class="links-list" id="links-list"></div>
+    <button class="btn btn-ghost btn-sm" onclick="addLinkRow()">+ Agregar link</button>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeContentModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveContent()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _url='',_key='',_tmdbKey='';
+
+function doAdminLogin(){
+  const url=document.getElementById('p-url').value.trim().replace(/\/$/,'');
+  const key=document.getElementById('p-key').value.trim();
+  const tmdb=document.getElementById('p-tmdb').value.trim();
+  const err=document.getElementById('login-error');
+  err.style.display='none';
+  if(!url||!key){err.textContent='Completa los campos';err.style.display='block';return;}
+  fetch(`${url}/admin/users`,{headers:{'X-Admin-Key':key}})
+    .then(r=>{if(!r.ok)throw new Error('');return r.json();})
+    .then(()=>{
+      _url=url;_key=key;_tmdbKey=tmdb;
+      window._tmdbKey=tmdb;
+      localStorage.setItem('sf_tmdb_key',tmdb);
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('app').classList.add('visible');
+      document.getElementById('server-badge').textContent=url.replace(/https?:\/\//,'');
+      loadDashboard();
+    })
+    .catch(()=>{err.textContent='No se pudo conectar o clave incorrecta';err.style.display='block';});
+}
+function doAdminLogout(){
+  _url='';_key='';
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app').classList.remove('visible');
+}
+
+function api(path,opts={}){
+  return fetch(`${_url}${path}`,{...opts,headers:{'X-Admin-Key':_key,'Content-Type':'application/json',...(opts.headers||{})}}).then(r=>r.json());
+}
+
+function showSection(s){
+  document.querySelectorAll('.section-view').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById(`sec-${s}`).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if(s==='dashboard')loadDashboard();
+  else if(s==='users')loadUsers();
+  else if(s==='movies')loadContent('movie');
+  else if(s==='series')loadContent('tv');
+}
+
+async function loadDashboard(){
+  const [users,content]=await Promise.all([api('/admin/users'),api('/admin/content')]);
+  document.getElementById('s-users').textContent=users.length||0;
+  document.getElementById('s-active').textContent=users.filter(u=>u.active).length||0;
+  const movies=content.filter(c=>c.type==='movie');
+  const series=content.filter(c=>c.type==='tv');
+  document.getElementById('s-movies').textContent=movies.length;
+  document.getElementById('s-series').textContent=series.length;
+  const recent=content.slice(0,10);
+  document.getElementById('recent-tbody').innerHTML=recent.map(c=>`<tr>
+    <td>${c.title}</td>
+    <td>${c.type==='movie'?'🎬 Película':'📺 Serie'}</td>
+    <td>${c.year||'-'}</td>
+    <td>${(c.links||[]).length}</td>
+    <td>${c.updated?c.updated.slice(0,10):'-'}</td>
+  </tr>`).join('');
+}
+
+async function loadUsers(){
+  const users=await api('/admin/users');
+  document.getElementById('users-tbody').innerHTML=users.map(u=>{
+    const exp=u.expires?new Date(u.expires):null;
+    const now=new Date();
+    const expired=exp&&exp<now;
+    const badge=!u.active?'<span class="badge badge-red">Inactivo</span>':expired?'<span class="badge badge-orange">Vencido</span>':'<span class="badge badge-green">Activo</span>';
+    return`<tr>
+      <td><strong>${u.username}</strong></td>
+      <td>${u.display_name||u.username}</td>
+      <td>${badge}</td>
+      <td>${exp?exp.toLocaleDateString('es-AR'):'Sin vencimiento'}</td>
+      <td>${u.created?u.created.slice(0,10):'-'}</td>
+      <td><div class="actions">
+        <button class="btn btn-ghost btn-sm" onclick="toggleUser('${u.username}')">${u.active?'Desactivar':'Activar'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="openExtend('${u.username}')">+Días</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')">Borrar</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function openUserModal(){
+  document.getElementById('um-username').value='';
+  document.getElementById('um-display').value='';
+  document.getElementById('um-pass').value='';
+  document.getElementById('um-days').value='';
+  document.getElementById('user-modal-error').style.display='none';
+  openM('user-modal');
+}
+function closeUserModal(){closeM('user-modal');}
+async function saveUser(){
+  const username=document.getElementById('um-username').value.trim();
+  const display_name=document.getElementById('um-display').value.trim();
+  const password=document.getElementById('um-pass').value;
+  const days=document.getElementById('um-days').value;
+  const err=document.getElementById('user-modal-error');
+  err.style.display='none';
+  if(!username||!password){err.textContent='Usuario y contraseña requeridos';err.style.display='block';return;}
+  const r=await api('/admin/users',{method:'POST',body:JSON.stringify({username,display_name,password,days:days?parseInt(days):null})});
+  if(r.success){closeUserModal();loadUsers();}
+  else{err.textContent=r.error||'Error';err.style.display='block';}
+}
+
+async function toggleUser(u){
+  await api(`/admin/users/${u}/toggle`,{method:'POST',body:'{}'});
+  loadUsers();
+}
+async function deleteUser(u){
+  if(!confirm(`¿Borrar usuario ${u}?`))return;
+  await api(`/admin/users/${u}`,{method:'DELETE'});
+  loadUsers();
+}
+function openExtend(u){
+  document.getElementById('ext-username').value=u;
+  document.getElementById('ext-days').value=30;
+  openM('extend-modal');
+}
+function closeExtend(){closeM('extend-modal');}
+async function doExtend(){
+  const u=document.getElementById('ext-username').value;
+  const days=parseInt(document.getElementById('ext-days').value)||30;
+  await api(`/admin/users/${u}/extend`,{method:'POST',body:JSON.stringify({days})});
+  closeExtend();loadUsers();
+}
+
+// CONTENT
+async function loadContent(type){
+  const all=await api('/admin/content');
+  const items=all.filter(c=>c.type===type);
+  const tbodyId=type==='movie'?'movies-tbody':'series-tbody';
+  document.getElementById(tbodyId).innerHTML=items.map(c=>`<tr>
+    <td><strong>${c.title}</strong></td>
+    <td>${c.year||'-'}</td>
+    <td>${c.tmdb_id}</td>
+    <td>${(c.links||[]).length}</td>
+    <td>${c.updated?c.updated.slice(0,10):'-'}</td>
+    <td><div class="actions">
+      <button class="btn btn-ghost btn-sm" onclick="editContent('${type}','${c.tmdb_id}')">Editar</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteContent('${type}','${c.tmdb_id}')">Borrar</button>
+    </div></td>
+  </tr>`).join('');
+}
+
+let _editLinks=[];
+function openContentModal(type,item=null){
+  document.getElementById('cm-type').value=type;
+  document.getElementById('cm-tmdb-id').value='';
+  document.getElementById('cm-title').value='';
+  document.getElementById('cm-year').value='';
+  document.getElementById('cm-poster').value='';
+  document.getElementById('cm-search').value='';
+  document.getElementById('tmdb-results').style.display='none';
+  document.getElementById('tmdb-results').innerHTML='';
+  document.getElementById('content-modal-title').textContent=`Agregar ${type==='movie'?'Película':'Serie'}`;
+  _editLinks=[];
+  renderLinks();
+  if(item){
+    document.getElementById('cm-tmdb-id').value=item.tmdb_id;
+    document.getElementById('cm-title').value=item.title;
+    document.getElementById('cm-year').value=item.year;
+    document.getElementById('cm-poster').value=item.poster;
+    _editLinks=item.links||[];
+    renderLinks();
+    document.getElementById('content-modal-title').textContent=`Editar: ${item.title}`;
+  }
+  openM('content-modal');
+}
+function closeContentModal(){closeM('content-modal');}
+
+async function editContent(type,id){
+  const item=await api(`/admin/content/${type}/${id}`);
+  openContentModal(type,item);
+}
+async function deleteContent(type,id){
+  if(!confirm('¿Borrar este contenido?'))return;
+  await api(`/admin/content/${type}/${id}`,{method:'DELETE'});
+  loadContent(type);
+}
+
+async function tmdbSearch(){
+  const q=document.getElementById('cm-search').value.trim();
+  const type=document.getElementById('cm-type').value;
+  if(!q)return;
+  const tmdbType=type==='movie'?'movie':'tv';
+  let url;
+  if(/^\d+$/.test(q)){
+    url=`https://api.themoviedb.org/3/${tmdbType}/${q}?api_key=${_tmdbKey}&language=es-AR`;
+    const r=await fetch(url).then(x=>x.json());
+    const results=[r].filter(x=>x.id);
+    showTmdbResults(results,tmdbType);
+  }else{
+    url=`https://api.themoviedb.org/3/search/${tmdbType}?api_key=${_tmdbKey}&language=es-AR&query=${encodeURIComponent(q)}`;
+    const r=await fetch(url).then(x=>x.json());
+    showTmdbResults(r.results||[],tmdbType);
+  }
+}
+
+function showTmdbResults(results,type){
+  const el=document.getElementById('tmdb-results');
+  el.style.display='grid';
+  el.innerHTML=results.slice(0,12).map(r=>{
+    const poster=r.poster_path?`https://image.tmdb.org/t/p/w185${r.poster_path}`:'';
+    const title=r.title||r.name||'';
+    return`<div class="tmdb-result-item" onclick="selectTmdb(${r.id},'${encodeURIComponent(title)}','${(r.release_date||r.first_air_date||'').slice(0,4)}','${poster}')">
+      ${poster?`<img src="${poster}" alt="${title}">`:'<div style="aspect-ratio:2/3;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:1.5rem">🎬</div>'}
+      <div class="r-title">${title}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectTmdb(id,title,year,poster){
+  document.querySelectorAll('.tmdb-result-item').forEach(el=>el.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  document.getElementById('cm-tmdb-id').value=id;
+  document.getElementById('cm-title').value=decodeURIComponent(title);
+  document.getElementById('cm-year').value=year;
+  document.getElementById('cm-poster').value=poster;
+}
+
+function addLinkRow(lnk={}){
+  _editLinks.push({name:lnk.name||'',quality:lnk.quality||'1080p',lang:lnk.lang||'Latino',url:lnk.url||''});
+  renderLinks();
+}
+function removeLink(i){_editLinks.splice(i,1);renderLinks();}
+function renderLinks(){
+  document.getElementById('links-list').innerHTML=_editLinks.map((lnk,i)=>`
+    <div class="link-row">
+      <input type="text" placeholder="Nombre" value="${lnk.name}" onchange="_editLinks[${i}].name=this.value">
+      <select onchange="_editLinks[${i}].quality=this.value">
+        ${['4K','1080p','720p','480p','HD','SD'].map(q=>`<option ${lnk.quality===q?'selected':''}>${q}</option>`).join('')}
+      </select>
+      <select onchange="_editLinks[${i}].lang=this.value">
+        ${['Latino','Español','Subtitulado','Inglés'].map(l=>`<option ${lnk.lang===l?'selected':''}>${l}</option>`).join('')}
+      </select>
+      <button class="btn btn-danger btn-sm" onclick="removeLink(${i})">✕</button>
+      <input type="text" placeholder="URL del link" value="${lnk.url}" onchange="_editLinks[${i}].url=this.value" style="grid-column:1/-1">
+    </div>`).join('');
+}
+
+async function saveContent(){
+  const type=document.getElementById('cm-type').value;
+  const tmdb_id=document.getElementById('cm-tmdb-id').value;
+  const title=document.getElementById('cm-title').value;
+  const year=document.getElementById('cm-year').value;
+  const poster=document.getElementById('cm-poster').value;
+  if(!tmdb_id||!title){alert('Selecciona un título de TMDB');return;}
+  await api('/admin/content',{method:'POST',body:JSON.stringify({tmdb_id,type,title,year,poster,links:_editLinks})});
+  closeContentModal();
+  loadContent(type);
+}
+
+// MODAL HELPERS
+function openM(id){
+  const o=document.getElementById(id);
+  o.classList.remove('hidden');
+  setTimeout(()=>o.classList.add('open'),10);
+}
+function closeM(id){
+  const o=document.getElementById(id);
+  o.classList.remove('open');
+  setTimeout(()=>o.classList.add('hidden'),300);
+}
+</script>
+</body>
+</html>
