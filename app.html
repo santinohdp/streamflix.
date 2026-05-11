@@ -529,7 +529,7 @@ body.tv .iptv-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
     <!-- PlayerJS container -->
     <div id="pjs-wrap" class="hide"></div>
     <!-- iframe / ExoPlayer -->
-    <iframe id="pf" class="hide" allowfullscreen allow="fullscreen *;autoplay *;encrypted-media *;picture-in-picture *" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-pointer-lock"></iframe>
+    <iframe id="pf" class="hide" allowfullscreen allow="fullscreen *;autoplay *;encrypted-media *;picture-in-picture *" referrerpolicy="no-referrer" ></iframe>
     <!-- Ad-block edge layers (don't block center so player controls work) -->
     <div class="ad-edge ad-edge-top"></div>
     <div class="ad-edge-l"></div>
@@ -1086,13 +1086,21 @@ function openPlayer(url,src,engine){
 
 function closePlayer(){
   document.getElementById('player').classList.remove('vis');
-  const pf=document.getElementById('pf');
-  pf.src='about:blank';
-  const pjsWrap=document.getElementById('pjs-wrap');
-  const vid=pjsWrap.querySelector('video');
-  if(vid&&vid._hls){try{vid._hls.destroy();}catch(e){}}
-  pjsWrap.innerHTML='';
-  pjsPlayer=null;
+  // Stop iframe
+  const pf = document.getElementById('pf');
+  pf.src = 'about:blank';
+  // Stop IPTV video + destroy HLS
+  const pjsWrap = document.getElementById('pjs-wrap');
+  const vid = document.getElementById('iptv-vid');
+  if (vid) {
+    if (vid._hls) { try { vid._hls.destroy(); } catch(e) {} }
+    vid.pause();
+    vid.src = '';
+    vid.load();
+  }
+  pjsWrap.innerHTML = '';
+  pjsWrap.classList.add('hide');
+  pjsPlayer = null;
 }
 
 // ═══ IPTV ════════════════════════════════════════════════
@@ -1124,58 +1132,70 @@ function renderIptvChannels(){
     </div>`).join('')}</div>`;
   body.querySelectorAll('img[data-src]').forEach(lazyImg);
 }
-// ═══ IPTV PLAYER (PlayerJS para HLS/live streams) ═══
-function playIptv(url,name){
-  document.getElementById('pl-ttl').textContent=name||'Canal';
-  document.getElementById('pl-src').textContent='IPTV Live';
-  document.getElementById('pl-engine').textContent='PlayerJS';
+// ═══ IPTV PLAYER — hls.js nativo ════════════════════════
+function playIptv(url, name) {
+  document.getElementById('pl-ttl').textContent = name || 'Canal';
+  document.getElementById('pl-src').textContent  = 'IPTV Live';
+  document.getElementById('pl-engine').textContent = 'HLS';
   document.getElementById('player').classList.add('vis');
-  history.pushState({pl:1},'','');
-  const pjsWrap=document.getElementById('pjs-wrap');
-  const pf=document.getElementById('pf');
-  pf.classList.add('hide');
-  pjsWrap.innerHTML='';
-  pjsWrap.classList.remove('hide');
-  // Usar PlayerJS para streams IPTV (HLS, MP4, etc)
-  const containerId='pjs-iptv-'+Date.now();
-  const div=document.createElement('div');
-  div.id=containerId;
-  div.style.cssText='width:100%;height:100%;background:#000';
-  pjsWrap.appendChild(div);
-  try{
-    pjsPlayer=new Playerjs({
-      id:containerId,
-      file:url,
-      autoplay:1,
-      volume:100,
-    });
-    console.log('[IPTV] PlayerJS iniciado para:',url);
-  }catch(e){
-    console.error('[IPTV] PlayerJS falló, intento con video nativo:',e);
-    // Fallback: video nativo + hls.js
-    div.innerHTML='';
-    const video=document.createElement('video');
-    video.style.cssText='width:100%;height:100%;';
-    video.controls=true;video.autoplay=true;video.playsInline=true;
-    div.appendChild(video);
-    loadHlsFallback(video,url);
-  }
-}
+  history.pushState({pl:1}, '', '');
 
-function loadHlsFallback(videoEl,url){
-  function tryPlay(){
-    if(window.Hls&&Hls.isSupported()){
-      const hls=new Hls({lowLatencyMode:true,enableWorker:true});
-      hls.loadSource(url);hls.attachMedia(videoEl);
-      hls.on(Hls.Events.MANIFEST_PARSED,()=>videoEl.play().catch(()=>{}));
-      videoEl._hls=hls;
-    }else{videoEl.src=url;videoEl.play().catch(()=>{});}
+  const pjsWrap = document.getElementById('pjs-wrap');
+  const pf      = document.getElementById('pf');
+  pf.classList.add('hide');
+  pjsWrap.innerHTML = '';
+  pjsWrap.classList.remove('hide');
+
+  // Crear video nativo
+  const video = document.createElement('video');
+  video.id          = 'iptv-vid';
+  video.controls    = true;
+  video.autoplay    = true;
+  video.playsInline = true;
+  video.style.cssText = 'width:100%;height:100%;background:#000;display:block';
+  pjsWrap.appendChild(video);
+
+  function initHLS() {
+    if (window.Hls && Hls.isSupported()) {
+      const hls = new Hls({
+        lowLatencyMode: true,
+        enableWorker:   true,
+        maxBufferLength: 30,
+        liveSyncDurationCount: 3,
+      });
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(err => console.warn('[IPTV] autoplay blocked:', err));
+      });
+      hls.on(Hls.Events.ERROR, (evt, data) => {
+        console.warn('[IPTV] HLS error:', data.type, data.details);
+        if (data.fatal) {
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { hls.startLoad(); }
+          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { hls.recoverMediaError(); }
+          else { hls.destroy(); video.src = url; video.play().catch(()=>{}); }
+        }
+      });
+      video._hls = hls;
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari HLS nativo
+      video.src = url;
+      video.play().catch(() => {});
+    } else {
+      // Fallback directo
+      video.src = url;
+      video.play().catch(() => {});
+    }
   }
-  if(window.Hls){tryPlay();}
-  else{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js';
-    s.onload=tryPlay;s.onerror=()=>{videoEl.src=url;videoEl.play().catch(()=>{});};
+
+  // Cargar hls.js si no está disponible
+  if (window.Hls) {
+    initHLS();
+  } else {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js';
+    s.onload  = initHLS;
+    s.onerror = () => { video.src = url; video.play().catch(() => {}); };
     document.head.appendChild(s);
   }
 }
@@ -1337,28 +1357,55 @@ function initAdBlock(){
   // The ad-edge layers have pointer-events:none so player controls work fine
   // Only the very edges (60px top/bottom, 35px sides) are covered
 
-  // 11) Block intent:// and app deep links from INSIDE iframe via navigation interception
-  // When iframe tries to navigate to intent://, it falls to window level
-  const INTENT_SCHEMES = ['intent://','market://','tel://','whatsapp://','tg://','fb://','instagram://','twitter://'];
-  window.addEventListener('navigate', e => {
-    const url = String(e.destination?.url || '');
-    if (INTENT_SCHEMES.some(s => url.startsWith(s))) {
-      e.preventDefault();
-      popWarn('App externo bloqueado ✓');
+  // 11) Navigation API — bloquea redireccionamientos de iframes (Chrome 102+)
+  const SAFE_ORIGIN = window.location.origin;
+  const INTENT_SCHEMES = ['intent:','market:','tel:','whatsapp:','tg:','fb:','instagram:','twitter:'];
+
+  if (window.navigation) {
+    window.navigation.addEventListener('navigate', e => {
+      const dest = e.destination.url || '';
+      // Bloquea si no es mismo origen Y hay player activo (viene del iframe)
+      if (!dest.startsWith(SAFE_ORIGIN) && !dest.startsWith('about:')) {
+        if (INTENT_SCHEMES.some(s => dest.startsWith(s)) ||
+            document.getElementById('player').classList.contains('vis')) {
+          e.preventDefault();
+          popWarn('Redirección bloqueada ✓');
+          console.log('[AB] navigate bloqueado:', dest);
+        }
+      }
+    });
+  }
+
+  // 12) Fallback: si la página se oculta mientras el player está activo = intento de redirect
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && document.getElementById('player').classList.contains('vis')) {
+      // El iframe intentó navegar la página, volvemos
+      setTimeout(() => {
+        try { history.go(1); } catch(e) {}
+        popWarn('Redirección bloqueada ✓');
+        console.log('[AB] visibilitychange redirect bloqueado');
+      }, 100);
     }
   });
 
-  // Override location setter to block intent navigation
-  const locProto = window.Location.prototype;
+  // 13) Override location.assign / replace para bloquear intents
   ['assign','replace'].forEach(m => {
-    const orig = locProto[m];
-    locProto[m] = function(url) {
-      const u = String(url || '');
-      if (INTENT_SCHEMES.some(s => u.startsWith(s))) {
-        popWarn('Navegación bloqueada ✓'); return;
-      }
-      return orig.call(this, url);
-    };
+    const orig = window.location[m].bind(window.location);
+    try {
+      Object.defineProperty(window.location, m, {
+        value: function(url) {
+          const u = String(url || '');
+          if (INTENT_SCHEMES.some(s => u.startsWith(s)) ||
+             (!u.startsWith(SAFE_ORIGIN) && !u.startsWith('/') && !u.startsWith('#') &&
+              document.getElementById('player').classList.contains('vis'))) {
+            popWarn('Navegación bloqueada ✓');
+            console.log('[AB] location.' + m + ' bloqueado:', u);
+            return;
+          }
+          return orig(url);
+        }, writable: true, configurable: true
+      });
+    } catch(e) {}
   });
 
   console.log('[AdBlock] Inicializado - protección máxima activada');
