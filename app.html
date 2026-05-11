@@ -529,7 +529,7 @@ body.tv .iptv-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
     <!-- PlayerJS container -->
     <div id="pjs-wrap" class="hide"></div>
     <!-- iframe / ExoPlayer -->
-    <iframe id="pf" class="hide" allowfullscreen allow="fullscreen *;autoplay *;encrypted-media *;picture-in-picture *" referrerpolicy="no-referrer"></iframe>
+    <iframe id="pf" class="hide" allowfullscreen allow="fullscreen *;autoplay *;encrypted-media *;picture-in-picture *" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-pointer-lock"></iframe>
     <!-- Ad-block edge layers (don't block center so player controls work) -->
     <div class="ad-edge ad-edge-top"></div>
     <div class="ad-edge-l"></div>
@@ -1068,47 +1068,31 @@ function spItem(name,url,badge,quality,lang,idx){
 function closePicker(){document.getElementById('src-pick').classList.remove('vis');}
 
 // ═══ PLAYER - PlayerJS + iframe ══════════════════════════
+// ═══ MOVIE/SERIES PLAYER (iframe con sandbox anti-redirect) ═══
 function openPlayer(url,src,engine){
-  engine=engine||'auto';
   document.getElementById('pl-ttl').textContent=document.getElementById('d-ttl')?.textContent||'Reproduciendo';
   document.getElementById('pl-src').textContent=src||'';
-  document.getElementById('pl-engine').textContent=engine==='playerjs'?'PlayerJS':'iframe';
+  document.getElementById('pl-engine').textContent='iframe';
   document.getElementById('player').classList.add('vis');
   history.pushState({pl:1},'','');
-
+  // Películas y series SIEMPRE usan iframe sandboxed
   const pjsWrap=document.getElementById('pjs-wrap');
   const pf=document.getElementById('pf');
-
-  if(engine==='playerjs'){
-    // Use PlayerJS
-    pjsWrap.classList.remove('hide');pf.classList.add('hide');
-    pjsWrap.innerHTML='';
-    const vid=document.createElement('div');vid.id='pjs-player';vid.style.cssText='width:100%;height:100%;';
-    pjsWrap.appendChild(vid);
-    try{
-      pjsPlayer=new Playerjs({id:'pjs-player',file:url,poster:'',autoplay:1});
-    }catch(e){
-      console.warn('PlayerJS fail, fallback iframe:',e);
-      pjsWrap.classList.add('hide');pf.classList.remove('hide');
-      pf.src=url;
-    }
-  }else{
-    // iframe / ExoPlayer style
-    pjsWrap.classList.add('hide');pf.classList.remove('hide');
-    pjsWrap.innerHTML='';
-    pf.src=url;
-  }
+  pjsWrap.classList.add('hide');
+  pjsWrap.innerHTML='';
+  pf.classList.remove('hide');
+  pf.src=url;
 }
 
 function closePlayer(){
   document.getElementById('player').classList.remove('vis');
-  const pf=document.getElementById('pf');pf.src='about:blank';
+  const pf=document.getElementById('pf');
+  pf.src='about:blank';
   const pjsWrap=document.getElementById('pjs-wrap');
-  // Destroy HLS if active
   const vid=pjsWrap.querySelector('video');
   if(vid&&vid._hls){try{vid._hls.destroy();}catch(e){}}
   pjsWrap.innerHTML='';
-  if(pjsPlayer){try{pjsPlayer=null;}catch(e){}}
+  pjsPlayer=null;
 }
 
 // ═══ IPTV ════════════════════════════════════════════════
@@ -1140,10 +1124,11 @@ function renderIptvChannels(){
     </div>`).join('')}</div>`;
   body.querySelectorAll('img[data-src]').forEach(lazyImg);
 }
+// ═══ IPTV PLAYER (PlayerJS para HLS/live streams) ═══
 function playIptv(url,name){
   document.getElementById('pl-ttl').textContent=name||'Canal';
   document.getElementById('pl-src').textContent='IPTV Live';
-  document.getElementById('pl-engine').textContent='HLS';
+  document.getElementById('pl-engine').textContent='PlayerJS';
   document.getElementById('player').classList.add('vis');
   history.pushState({pl:1},'','');
   const pjsWrap=document.getElementById('pjs-wrap');
@@ -1151,54 +1136,47 @@ function playIptv(url,name){
   pf.classList.add('hide');
   pjsWrap.innerHTML='';
   pjsWrap.classList.remove('hide');
-  // Build native video + hls.js player
-  const isHLS = url.includes('.m3u8') || url.includes('m3u') || url.includes('/hls/') || url.includes('playlist');
-  const videoEl = document.createElement('video');
-  videoEl.id = 'iptv-video';
-  videoEl.style.cssText = 'width:100%;height:100%;background:#000;outline:none';
-  videoEl.controls = true;
-  videoEl.autoplay = true;
-  videoEl.playsInline = true;
-  pjsWrap.appendChild(videoEl);
-  if (isHLS) {
-    // Load hls.js dynamically
-    if (window.Hls) {
-      startHLS(videoEl, url);
-    } else {
-      const sc = document.createElement('script');
-      sc.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js';
-      sc.onload = () => startHLS(videoEl, url);
-      sc.onerror = () => { videoEl.src = url; videoEl.play().catch(()=>{}); };
-      document.head.appendChild(sc);
-    }
-  } else {
-    // Direct MP4 or other
-    videoEl.src = url;
-    videoEl.play().catch(()=>{});
+  // Usar PlayerJS para streams IPTV (HLS, MP4, etc)
+  const containerId='pjs-iptv-'+Date.now();
+  const div=document.createElement('div');
+  div.id=containerId;
+  div.style.cssText='width:100%;height:100%;background:#000';
+  pjsWrap.appendChild(div);
+  try{
+    pjsPlayer=new Playerjs({
+      id:containerId,
+      file:url,
+      autoplay:1,
+      volume:100,
+    });
+    console.log('[IPTV] PlayerJS iniciado para:',url);
+  }catch(e){
+    console.error('[IPTV] PlayerJS falló, intento con video nativo:',e);
+    // Fallback: video nativo + hls.js
+    div.innerHTML='';
+    const video=document.createElement('video');
+    video.style.cssText='width:100%;height:100%;';
+    video.controls=true;video.autoplay=true;video.playsInline=true;
+    div.appendChild(video);
+    loadHlsFallback(video,url);
   }
 }
 
-function startHLS(videoEl, url) {
-  if (Hls.isSupported()) {
-    const hls = new Hls({
-      enableWorker: true,
-      lowLatencyMode: true,
-      backBufferLength: 90
-    });
-    hls.loadSource(url);
-    hls.attachMedia(videoEl);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => videoEl.play().catch(()=>{}));
-    hls.on(Hls.Events.ERROR, (e,d) => {
-      if (d.fatal) { console.warn('[HLS] Fatal error, retrying...'); hls.destroy(); setTimeout(()=>startHLS(videoEl,url),3000); }
-    });
-    videoEl._hls = hls;
-  } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-    // Safari native HLS
-    videoEl.src = url;
-    videoEl.play().catch(()=>{});
-  } else {
-    videoEl.src = url;
-    videoEl.play().catch(()=>{});
+function loadHlsFallback(videoEl,url){
+  function tryPlay(){
+    if(window.Hls&&Hls.isSupported()){
+      const hls=new Hls({lowLatencyMode:true,enableWorker:true});
+      hls.loadSource(url);hls.attachMedia(videoEl);
+      hls.on(Hls.Events.MANIFEST_PARSED,()=>videoEl.play().catch(()=>{}));
+      videoEl._hls=hls;
+    }else{videoEl.src=url;videoEl.play().catch(()=>{});}
+  }
+  if(window.Hls){tryPlay();}
+  else{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js';
+    s.onload=tryPlay;s.onerror=()=>{videoEl.src=url;videoEl.play().catch(()=>{});};
+    document.head.appendChild(s);
   }
 }
 
