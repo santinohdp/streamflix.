@@ -555,6 +555,10 @@ body.tv .iptv-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
           <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
           HLS.js <span class="sw-status">AUTO</span>
         </button>
+        <button class="iptv-sw-btn" id="sw-proxy" onclick="switchIptvPlayer('proxy')">
+          <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 4l5 2.18V11c0 3.5-2.33 6.79-5 7.93C9.33 17.79 7 14.5 7 11V7.18L12 5z"/></svg>
+          Proxy <span class="sw-status">CORS</span>
+        </button>
         <button class="iptv-sw-btn" id="sw-videojs" onclick="switchIptvPlayer('videojs')">
           <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM8 15l7-4-7-4v8z"/></svg>
           Video.js <span class="sw-status">ALT</span>
@@ -1191,7 +1195,7 @@ function toggleIptvSwitcher() {
 function switchIptvPlayer(engine) {
   _iptvEngine = engine;
   // Update button states
-  ['hlsjs','videojs','native'].forEach(e => {
+  ['hlsjs','proxy','videojs','native'].forEach(e => {
     document.getElementById('sw-'+e).classList.toggle('on', e===engine);
   });
   document.getElementById('iptv-switcher').classList.remove('vis');
@@ -1228,9 +1232,10 @@ function _startIptvEngine(engine) {
   pf.classList.add('hide');
   wrap.classList.remove('hide');
   document.getElementById('pl-engine').textContent =
-    engine==='hlsjs' ? 'HLS.js' : engine==='videojs' ? 'Video.js' : 'Nativo';
+    engine==='hlsjs' ? 'HLS.js' : engine==='proxy' ? 'Proxy+HLS' : engine==='videojs' ? 'Video.js' : 'Nativo';
 
   if (engine === 'hlsjs')   _engineHlsjs();
+  if (engine === 'proxy')   _engineProxy();
   if (engine === 'videojs') _engineVideojs();
   if (engine === 'native')  _engineNative();
 }
@@ -1270,6 +1275,81 @@ function _engineHlsjs() {
     s.onerror = _engineNative;
     document.head.appendChild(s);
   }
+}
+
+// ── Motor PROXY: HLS.js con proxy anti-CORS ─────────
+// Usa nuestro servidor como intermediario para sortear CORS
+// Ideal para: Telefe, Crónica, canales argentinos, etc.
+function _engineProxy() {
+  const video = _makeVideo();
+  const proxyBase = API_URL + '/proxy/hls?url=';
+  const proxyUrl  = proxyBase + encodeURIComponent(_iptvUrl);
+
+  // Mostrar estado de carga
+  _showIptvStatus('🔄 Conectando vía proxy...', 'loading');
+
+  function init() {
+    if (window.Hls && Hls.isSupported()) {
+      const hls = new Hls({
+        lowLatencyMode: true,
+        enableWorker:   true,
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        liveSyncDurationCount: 3,
+        liveBackBufferLength: 30,
+        fragLoadingTimeOut: 20000,
+        manifestLoadingTimeOut: 20000,
+        levelLoadingTimeOut: 20000,
+        startFragPrefetch: true,
+        testBandwidth: false,
+        xhrSetup: function(xhr) {
+          xhr.withCredentials = false;
+        }
+      });
+      hls.loadSource(proxyUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        _showIptvStatus('', '');
+        video.play().catch(()=>{});
+      });
+      hls.on(Hls.Events.ERROR, (e, d) => {
+        console.warn('[PROXY] HLS error:', d.type, d.details);
+        if (d.fatal) {
+          _showIptvStatus('❌ Error de proxy. Probá otro reproductor.', 'error');
+          if (d.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+          else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+        }
+      });
+      video._hls = hls;
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = proxyUrl; video.play().catch(()=>{});
+    } else {
+      _engineNative();
+    }
+  }
+
+  if (window.Hls) { init(); }
+  else {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js';
+    s.onload = init;
+    s.onerror = () => { video.src = proxyUrl; video.play().catch(()=>{}); };
+    document.head.appendChild(s);
+  }
+}
+
+function _showIptvStatus(msg, type) {
+  let el = document.getElementById('iptv-status-msg');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'iptv-status-msg';
+    el.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.75);color:#fff;padding:12px 20px;border-radius:12px;font-size:.85rem;font-weight:600;z-index:15;pointer-events:none;text-align:center;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12)';
+    document.getElementById('pjs-wrap').appendChild(el);
+  }
+  if (!msg) { el.style.display='none'; return; }
+  el.style.display = 'block';
+  el.textContent   = msg;
+  el.style.color   = type==='error' ? '#f87171' : type==='loading' ? '#a78bfa' : '#fff';
 }
 
 // ── Motor 2: Video.js ────────────────────────────────
@@ -1359,184 +1439,203 @@ async function doSearch(q){
   grid.querySelectorAll('img[data-src]').forEach(lazyImg);
 }
 
-// ═══ ULTRA AGGRESSIVE ADBLOCK ════════════════════════════
+// ═══ NUCLEAR ADBLOCK — NO redirecciones, NO popups, SÍ reproductor ══════════
 function initAdBlock(){
+  const SAFE    = window.location.origin;
+  const MY_URL  = window.location.href;
 
-  // 1) Block window.open — return fake window so scripts don't crash
-  window.open = function(url, target, features) {
-    popWarn('Ventana emergente bloqueada ✓');
-    return { closed:true, close:()=>{}, focus:()=>{}, blur:()=>{}, document:{write:()=>{}} };
-  };
-  try { Object.defineProperty(window,'open',{value:window.open,writable:false,configurable:false}); } catch(e){}
+  const BAD_SCHEMES = ['intent:','market:','tel:','sms:','whatsapp:','tg:',
+    'fb:','instagram:','twitter:','snapchat:','viber:','skype:','mailto:'];
 
-  // 2) Block alert / confirm / prompt
-  window.alert   = () => {};
-  window.confirm = () => false;
-  window.prompt  = () => '';
-
-  // 3) Detect popups via blur — NO window.focus() (breaks player interaction)
-  let _blurWarn;
-  window.addEventListener('blur', () => {
-    clearTimeout(_blurWarn);
-    _blurWarn = setTimeout(() => popWarn('Ventana emergente bloqueada ✓'), 300);
-  });
-  window.addEventListener('focus', () => clearTimeout(_blurWarn));
-
-  // 4) Block intent:// and app deep links that trigger "Abrir con" dialog
-  // These come from inside iframes trying to launch external apps
-  const _origAssign = Object.getOwnPropertyDescriptor(window.location,'assign');
-  try {
-    // Block navigation to intent:// market:// tel:// etc
-    const BLOCKED_SCHEMES = ['intent:','market:','tel:','whatsapp:','tg:','fb:','instagram:'];
-    window.addEventListener('click', e => {
-      const a = e.target.closest('a');
-      if (!a) return;
-      const href = (a.href || a.getAttribute('href') || '');
-      if (BLOCKED_SCHEMES.some(s => href.startsWith(s))) {
-        e.preventDefault(); e.stopImmediatePropagation();
-        popWarn('Enlace externo bloqueado ✓');
-      }
-    }, true);
-  } catch(e) {}
-
-  // 5) Block target=_blank and ANY external navigation
-  document.addEventListener('click',e=>{
-    const a=e.target.closest('a');
-    if(!a) return;
-    const href=a.href||'';
-    const sameOrigin=href.startsWith(window.location.origin)||href.startsWith('/');
-    if(!sameOrigin&&href&&!href.startsWith('#')&&!href.startsWith('javascript')){
-      e.preventDefault();e.stopImmediatePropagation();
-      popWarn(`Navegación bloqueada: ${new URL(href).hostname}`);
-    }
-  },true);
-
-  // 6) Block domains list
-  const BLOCKED=['doubleclick','googlesyndication','googletagmanager','googleadservices',
+  const BAD_DOMAINS = [
+    'doubleclick','googlesyndication','googletagmanager','googleadservices',
     'google-analytics','adservice.google','pagead2','ads.yahoo','advertising.com',
     'adnxs','adsrvr','adform','adroll','criteo','rubiconproject','openx','pubmatic',
     'appnexus','smartadserver','taboola','outbrain','mgid','sharethrough','bidswitch',
     'exoclick','trafficjunky','juicyads','propellerads','popads','adsterra','clickadu',
-    'adcash','yllix','trafficstars','hotjar','mixpanel','coin-hive','coinhive',
-    'popunder','clickunder','adclick','adskeeper','infolinks','revcontent','zedo',
-    'undertone','spoutable','vidoomy','mgid','richaudience'];
+    'adcash','yllix','trafficstars','coin-hive','coinhive','popunder','clickunder',
+    'adskeeper','infolinks','revcontent','zedo','undertone','spoutable','vidoomy',
+    'richaudience','pop.under','popunder','v7-allow','pages.dev','click_id',
+    'source_id','site_id','redirect','redir','track','pixel.','beacon.',
+    'trk.','clk.','imp.','cpx.','cpz.','spy.'];
 
-  // 7) Override fetch
-  const _fetch=window.fetch;
-  window.fetch=function(...args){
-    const url=String(args[0]||'');
-    if(BLOCKED.some(d=>url.includes(d))){
-      console.log('[AB] fetch bloqueado:',url);
-      return Promise.reject(new Error('Blocked'));
-    }
-    return _fetch.apply(this,args);
+  // ── 1. window.open → MUERTO ─────────────────────────────
+  const _fakeWin = {
+    closed:true, close:()=>{}, focus:()=>{}, blur:()=>{},
+    document:{write:()=>{}, writeln:()=>{}, open:()=>{}, close:()=>{}},
+    location:{href:'',assign:()=>{}, replace:()=>{}},
+    history:{pushState:()=>{}, replaceState:()=>{}},
   };
+  window.open = () => { popWarn('Popup bloqueado ✓'); return _fakeWin; };
+  try { Object.defineProperty(window,'open',{value:window.open,writable:false}); } catch(e){}
 
-  // 8) Override XHR
-  const _XOpen=XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open=function(m,url,...r){
-    if(BLOCKED.some(d=>String(url||'').includes(d))){
-      this._ab=true;console.log('[AB] XHR bloqueado:',url);return;
-    }
-    return _XOpen.call(this,m,url,...r);
-  };
-  const _XSend=XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.send=function(...a){if(this._ab)return;return _XSend.apply(this,a);};
+  // ── 2. Dialogs bloqueados ────────────────────────────────
+  window.alert   = () => {};
+  window.confirm = () => false;
+  window.prompt  = () => null;
+  window.print   = () => {};
 
-  // 9) MutationObserver - aggressively remove ad overlays
-  // IMPORTANT: only remove elements NOT inside #player or #src-pick
-  const PLAYER_EL=document.getElementById('player');
-  const PICKER_EL=document.getElementById('src-pick');
-  const POPUP_EL=document.getElementById('pop-warn');
-
-  function nukeAds(){
-    // Remove ad iframes (not #pf)
-    document.querySelectorAll('iframe:not(#pf)').forEach(el=>{
-      if(PLAYER_EL.contains(el)||PICKER_EL.contains(el)) return;
-      const src=el.src||el.getAttribute('src')||'';
-      if(BLOCKED.some(d=>src.includes(d))||src.includes('/ads/')||src.includes('popunder')){el.remove();}
-    });
-    // Remove high-z overlays (NOT inside player, picker, pop-warn, or our app screens)
-    document.querySelectorAll('*').forEach(el=>{
-      if(el===PLAYER_EL||PLAYER_EL.contains(el)) return;
-      if(el===PICKER_EL||PICKER_EL.contains(el)) return;
-      if(el===POPUP_EL||POPUP_EL.contains(el)) return;
-      if(['s-design','s-login','app','toast'].includes(el.id)) return;
-      try{
-        const s=window.getComputedStyle(el);
-        const z=parseInt(s.zIndex)||0;
-        if(z>8000&&(s.position==='fixed'||s.position==='absolute')){
-          el.remove();console.log('[AB] Overlay eliminado:',el.tagName,z);
-        }
-      }catch(e){}
-    });
-    // Remove ad scripts
-    document.querySelectorAll('script[src]').forEach(el=>{
-      if(BLOCKED.some(d=>(el.src||'').includes(d))){el.remove();}
-    });
-  }
-
-  const obs=new MutationObserver(()=>requestAnimationFrame(nukeAds));
-  obs.observe(document.documentElement,{childList:true,subtree:true});
-  setInterval(nukeAds,1500);
-  nukeAds();
-
-  // 10) Protect iframe player - allow touches inside player body
-  // The ad-edge layers have pointer-events:none so player controls work fine
-  // Only the very edges (60px top/bottom, 35px sides) are covered
-
-  // 11) Navigation API — bloquea redireccionamientos de iframes (Chrome 102+)
-  const SAFE_ORIGIN = window.location.origin;
-  const INTENT_SCHEMES = ['intent:','market:','tel:','whatsapp:','tg:','fb:','instagram:','twitter:'];
-
+  // ── 3. Navigation API (Chrome 102+) — BLOQUEO DURO ──────
+  // Este es el que realmente frena top.location = '...' desde iframe
   if (window.navigation) {
     window.navigation.addEventListener('navigate', e => {
-      const dest = e.destination.url || '';
-      // Bloquea si no es mismo origen Y hay player activo (viene del iframe)
-      if (!dest.startsWith(SAFE_ORIGIN) && !dest.startsWith('about:')) {
-        if (INTENT_SCHEMES.some(s => dest.startsWith(s)) ||
-            document.getElementById('player').classList.contains('vis')) {
-          e.preventDefault();
-          popWarn('Redirección bloqueada ✓');
-          console.log('[AB] navigate bloqueado:', dest);
-        }
+      const dest = String(e.destination?.url || '');
+      const isExternal = !dest.startsWith(SAFE) && !dest.startsWith('about:') && !dest.startsWith('blob:');
+      const isIntent   = BAD_SCHEMES.some(s => dest.startsWith(s));
+      const isAd       = BAD_DOMAINS.some(d => dest.includes(d));
+      const playerOn   = document.getElementById('player').classList.contains('vis');
+      if (isIntent || isAd || (isExternal && playerOn)) {
+        e.preventDefault();
+        popWarn('Redirección bloqueada ✓');
+        console.log('[AB] Navigation API bloqueó:', dest.slice(0,80));
       }
     });
+    console.log('[AB] Navigation API activa');
   }
 
-  // 12) Fallback: si la página se oculta mientras el player está activo = intento de redirect
+  // ── 4. Guardia de URL — detecta si igual logra redirigir ─
+  // Cada 250ms verificamos que seguimos en la misma URL
+  let _urlGuard = setInterval(() => {
+    if (!document.getElementById('player').classList.contains('vis')) return;
+    if (window.location.href !== MY_URL && !window.location.href.startsWith(SAFE)) {
+      console.warn('[AB] URL cambió! Volviendo...', window.location.href);
+      history.go(-1);
+      setTimeout(() => {
+        popWarn('Redirección forzada bloqueada ✓');
+      }, 200);
+    }
+  }, 250);
+
+  // ── 5. visibilitychange — si la página se oculta, volvemos ─
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && document.getElementById('player').classList.contains('vis')) {
-      // El iframe intentó navegar la página, volvemos
       setTimeout(() => {
         try { history.go(1); } catch(e) {}
         popWarn('Redirección bloqueada ✓');
-        console.log('[AB] visibilitychange redirect bloqueado');
-      }, 100);
+      }, 80);
     }
   });
 
-  // 13) Override location.assign / replace para bloquear intents
-  ['assign','replace'].forEach(m => {
-    const orig = window.location[m].bind(window.location);
-    try {
-      Object.defineProperty(window.location, m, {
-        value: function(url) {
-          const u = String(url || '');
-          if (INTENT_SCHEMES.some(s => u.startsWith(s)) ||
-             (!u.startsWith(SAFE_ORIGIN) && !u.startsWith('/') && !u.startsWith('#') &&
-              document.getElementById('player').classList.contains('vis'))) {
-            popWarn('Navegación bloqueada ✓');
-            console.log('[AB] location.' + m + ' bloqueado:', u);
-            return;
-          }
-          return orig(url);
-        }, writable: true, configurable: true
-      });
-    } catch(e) {}
+  // ── 6. pageshow — si volvemos de una redirección ─────────
+  window.addEventListener('pageshow', e => {
+    if (e.persisted) return; // navegación normal de caché
+    if (document.getElementById('player').classList.contains('vis')) {
+      popWarn('Redirección bloqueada ✓');
+    }
   });
 
-  console.log('[AdBlock] Inicializado - protección máxima activada');
+  // ── 7. Blur sin foco = popup/nueva pestaña ───────────────
+  let _blurTimer;
+  window.addEventListener('blur', () => {
+    clearTimeout(_blurTimer);
+    _blurTimer = setTimeout(() => popWarn('Ventana emergente bloqueada ✓'), 400);
+  });
+  window.addEventListener('focus', () => clearTimeout(_blurTimer));
+
+  // ── 8. Override location methods ────────────────────────
+  ['assign','replace'].forEach(method => {
+    try {
+      const orig = window.location[method].bind(window.location);
+      window.location[method] = function(url) {
+        const u = String(url || '');
+        const bad = BAD_SCHEMES.some(s => u.startsWith(s)) ||
+                    BAD_DOMAINS.some(d => u.includes(d)) ||
+                    (!u.startsWith(SAFE) && !u.startsWith('/') && !u.startsWith('#') &&
+                     document.getElementById('player').classList.contains('vis'));
+        if (bad) { popWarn('Navegación bloqueada ✓'); return; }
+        return orig(url);
+      };
+    } catch(e){}
+  });
+
+  // ── 9. Override history.pushState para detectar SPA redirects ─
+  const _origPush = history.pushState.bind(history);
+  history.pushState = function(state, title, url) {
+    if (url && typeof url === 'string') {
+      const abs = url.startsWith('http') ? url : SAFE + url;
+      if (!abs.startsWith(SAFE)) {
+        popWarn('Redirección SPA bloqueada ✓');
+        return;
+      }
+    }
+    return _origPush(state, title, url);
+  };
+
+  // ── 10. fetch/XHR bloqueados para dominios de ads ────────
+  const _origFetch = window.fetch;
+  window.fetch = function(...args) {
+    const url = String(args[0] || '');
+    if (BAD_DOMAINS.some(d => url.includes(d))) return Promise.reject(new Error('Blocked by AdBlock'));
+    return _origFetch.apply(this, args);
+  };
+  const _origXhrOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(m, url, ...rest) {
+    if (BAD_DOMAINS.some(d => String(url||'').includes(d))) { this._blocked=true; return; }
+    return _origXhrOpen.call(this, m, url, ...rest);
+  };
+  const _origXhrSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function(...a) {
+    if (this._blocked) return;
+    return _origXhrSend.apply(this, a);
+  };
+
+  // ── 11. MutationObserver — elimina iframes y overlays de ads ─
+  const PLAYER_EL = document.getElementById('player');
+  const PICKER_EL = document.getElementById('src-pick');
+  const SAFE_IDS  = new Set(['player','src-pick','pop-warn','toast','app','s-design','s-login']);
+
+  function nukeAds() {
+    // Iframes externos (no el #pf del player)
+    document.querySelectorAll('iframe:not(#pf)').forEach(el => {
+      if (PLAYER_EL.contains(el) || PICKER_EL.contains(el)) return;
+      const src = el.src || el.getAttribute('src') || '';
+      if (!src || BAD_DOMAINS.some(d => src.includes(d)) ||
+          BAD_SCHEMES.some(s => src.startsWith(s)) ||
+          src.includes('/ads/') || src.includes('popunder') || src.includes('pop.')) {
+        el.remove(); return;
+      }
+    });
+    // Overlays flotantes (z > 8000) que no sean del player
+    document.querySelectorAll('*').forEach(el => {
+      if (PLAYER_EL === el || PLAYER_EL.contains(el)) return;
+      if (PICKER_EL === el || PICKER_EL.contains(el)) return;
+      if (el.id && SAFE_IDS.has(el.id)) return;
+      if (el.closest('#player') || el.closest('#src-pick') ||
+          el.closest('#app') || el.closest('#s-login') || el.closest('#s-design')) return;
+      try {
+        const s = window.getComputedStyle(el);
+        const z = parseInt(s.zIndex) || 0;
+        if (z > 8000 && (s.position === 'fixed' || s.position === 'absolute')) {
+          el.remove();
+        }
+      } catch(e) {}
+    });
+    // Scripts de ad networks
+    document.querySelectorAll('script[src]').forEach(el => {
+      if (BAD_DOMAINS.some(d => (el.src||'').includes(d))) el.remove();
+    });
+  }
+
+  new MutationObserver(() => requestAnimationFrame(nukeAds))
+    .observe(document.documentElement, {childList:true, subtree:true});
+  setInterval(nukeAds, 1000);
+  nukeAds();
+
+  // ── 12. Clicks en enlaces externos ───────────────────────
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a');
+    if (!a) return;
+    const href = a.href || a.getAttribute('href') || '';
+    if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+    const isInternal = href.startsWith(SAFE) || href.startsWith('/');
+    const isIntent   = BAD_SCHEMES.some(s => href.startsWith(s));
+    if (isIntent || (!isInternal && document.getElementById('player').classList.contains('vis'))) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      popWarn('Enlace externo bloqueado ✓');
+    }
+  }, true);
+
+  console.log('[AdBlock] ☢ NUCLEAR MODE — protección máxima activada');
 }
 
 // ═══ BACK BUTTON ═════════════════════════════════════════
