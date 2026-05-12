@@ -1,10 +1,17 @@
-from flask import Flask, request, jsonify, send_file, redirect
+from flask import Flask, request, jsonify, send_file, redirect, Response, stream_with_context
 from flask_cors import CORS
-import json, os, hashlib, secrets, uuid
+import json, os, hashlib, secrets, uuid, re
 from datetime import datetime, timedelta
+from urllib.parse import urlparse, urljoin, quote, unquote
+
+try:
+    import requests as req_lib
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 USERS_FILE   = "users.json"
 CONTENT_FILE = "content.json"
@@ -12,25 +19,42 @@ IPTV_FILE    = "iptv.json"
 ADMIN_KEY    = "admin1234"
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 
-# ── HELPERS ─────────────────────────────────────────────────────────────
+PROXY_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': '*/*',
+    'Accept-Language': 'es-AR,es;q=0.9,en;q=0.8',
+    'Accept-Encoding': 'gzip, deflate',
+    'Connection': 'keep-alive',
+}
+
+# ── HELPERS ──────────────────────────────────────────────────────────────────
 def load_json(f, default):
     if not os.path.exists(f): return default
     with open(f) as fp: return json.load(fp)
 
-def save_json(f, data):
+def save_json(f, data): save_json_safe(f, data)
+def save_json_safe(f, data):
     with open(f, "w") as fp: json.dump(data, fp, indent=2)
 
 def load_users():   return load_json(USERS_FILE,   {"users":{}, "tokens":{}})
-def save_users(d):  save_json(USERS_FILE, d)
+def save_users(d):  save_json_safe(USERS_FILE, d)
 def load_content(): return load_json(CONTENT_FILE, {"movies":{}, "series":{}})
-def save_content(d):save_json(CONTENT_FILE, d)
+def save_content(d):save_json_safe(CONTENT_FILE, d)
 def load_iptv():    return load_json(IPTV_FILE,    {"channels":[], "categories":[]})
-def save_iptv(d):   save_json(IPTV_FILE, d)
+def save_iptv(d):   save_json_safe(IPTV_FILE, d)
 
 def hash_pw(pw):    return hashlib.sha256(pw.encode()).hexdigest()
 def check_admin(r): return r.headers.get("X-Admin-Key") == ADMIN_KEY
 
-# ── STATIC FILES ────────────────────────────────────────────────────────
+def cors_headers():
+    return {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Expose-Headers': '*',
+    }
+
+# ── STATIC FILES ──────────────────────────────────────────────────────────────
 @app.route("/")
 def index(): return redirect("/app")
 
@@ -41,9 +65,129 @@ def serve_app(): return send_file(os.path.join(BASE_DIR, "app.html"))
 def serve_panel(): return send_file(os.path.join(BASE_DIR, "panel.html"))
 
 @app.route("/playerjs.js")
-def serve_playerjs(): return send_file(os.path.join(BASE_DIR, "playerjs.js"))
+def serve_playerjs():
+    pjs = os.path.join(BASE_DIR, "playerjs.js")
+    if os.path.exists(pjs): return send_file(pjs)
+    return "// playerjs not found", 404
 
-# ── AUTH ────────────────────────────────────────────────────────────────
+# ── HLS PROXY ─────────────────────────────────────────────────────────────────
+# Rewrites a single URL to go through our proxy
+def proxify(url, base_url):
+    """Make a URL absolute and wrap it in our proxy"""
+    if not url or url.startswith('#') or url.startswith('data:'):
+        return url
+    abs_url = urljoin(base_url, url.strip())
+    return f"/proxy/hls?url={quote(abs_url, safe='')}"
+
+def rewrite_m3u8(content, base_url):
+    """Rewrite all URIs inside an m3u8 playlist to go through our proxy"""
+    lines = content.split('\n')
+    out   = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            out.append(line); continue
+        # Rewrite URI= attributes (encryption keys, etc.)
+        if 'URI="' in line or "URI='" in line:
+            line = re.sub(
+                r'URI=["\']([^"\']+)["\']',
+                lambda m: f'URI="{proxify(m.group(1), base_url)}"',
+                line
+            )
+        # Rewrite segment/playlist lines (not comment lines)
+        if not stripped.startswith('#') and (
+            stripped.endswith('.m3u8') or stripped.endswith('.ts') or
+            stripped.endswith('.mp4') or stripped.endswith('.aac') or
+            stripped.endswith('.vtt') or stripped.startswith('http') or
+            '/' in stripped
+        ):
+            out.append(proxify(stripped, base_url))
+        else:
+            out.append(line)
+    return '\n'.join(out)
+
+@app.route("/proxy/hls")
+def proxy_hls():
+    if not HAS_REQUESTS:
+        return "requests library not installed. Run: pip install requests", 503
+    
+    url = request.args.get('url', '').strip()
+    if not url:
+        return "No URL provided", 400
+    url = unquote(url)
+    
+    # Basic security: only allow http/https
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        return "Invalid scheme", 400
+
+    headers = dict(PROXY_HEADERS)
+    # Forward range header for seeking
+    if 'Range' in request.headers:
+        headers['Range'] = request.headers['Range']
+    # Set Referer/Origin to the stream's own domain to bypass hotlink protection
+    headers['Referer'] = f"{parsed.scheme}://{parsed.netloc}/"
+    headers['Origin']  = f"{parsed.scheme}://{parsed.netloc}"
+
+    try:
+        upstream = req_lib.get(
+            url, headers=headers, stream=True,
+            timeout=15, allow_redirects=True,
+            verify=False  # some channels use self-signed certs
+        )
+        ct = upstream.headers.get('Content-Type', '').lower()
+        is_m3u8 = (
+            'm3u' in ct or 'mpegurl' in ct or
+            url.lower().endswith('.m3u8') or
+            url.lower().endswith('.m3u')
+        )
+
+        resp_headers = dict(cors_headers())
+        resp_headers['Cache-Control'] = 'no-cache, no-store'
+
+        if is_m3u8:
+            # Rewrite the playlist so all segment URLs go through our proxy too
+            content = upstream.content.decode('utf-8', errors='replace')
+            rewritten = rewrite_m3u8(content, url)
+            resp_headers['Content-Type'] = 'application/vnd.apple.mpegurl; charset=utf-8'
+            return Response(rewritten, status=upstream.status_code, headers=resp_headers)
+        else:
+            # Stream binary (TS segments, MP4, etc.)
+            resp_headers['Content-Type'] = ct or 'application/octet-stream'
+            if 'Content-Length' in upstream.headers:
+                resp_headers['Content-Length'] = upstream.headers['Content-Length']
+            if 'Accept-Ranges' in upstream.headers:
+                resp_headers['Accept-Ranges'] = upstream.headers['Accept-Ranges']
+            if 'Content-Range' in upstream.headers:
+                resp_headers['Content-Range'] = upstream.headers['Content-Range']
+
+            def generate():
+                try:
+                    for chunk in upstream.iter_content(chunk_size=65536):
+                        if chunk: yield chunk
+                except Exception as e:
+                    print(f"[PROXY] Stream error: {e}")
+
+            return Response(
+                stream_with_context(generate()),
+                status=upstream.status_code,
+                headers=resp_headers
+            )
+    except req_lib.exceptions.SSLError:
+        # Retry without SSL verification (already false but just in case)
+        return "SSL Error on upstream", 502
+    except req_lib.exceptions.ConnectionError as e:
+        return f"Connection error: {str(e)[:200]}", 502
+    except req_lib.exceptions.Timeout:
+        return "Upstream timeout", 504
+    except Exception as e:
+        return f"Proxy error: {str(e)[:200]}", 500
+
+@app.route("/proxy/hls", methods=["OPTIONS"])
+def proxy_hls_options():
+    return Response("", headers=cors_headers())
+
+# ── AUTH ──────────────────────────────────────────────────────────────────────
 @app.route("/api/login", methods=["POST"])
 def api_login():
     d = request.get_json() or {}
@@ -73,7 +217,7 @@ def api_verify():
 @app.route("/api/version")
 def api_version(): return jsonify({"version":"1.0.0","apk_url":"","message":""})
 
-# ── CONTENT ─────────────────────────────────────────────────────────────
+# ── CONTENT ───────────────────────────────────────────────────────────────────
 @app.route("/api/links/<ctype>/<tmdb_id>")
 def api_links(ctype, tmdb_id):
     data = load_content()
@@ -86,12 +230,11 @@ def api_catalog():
     data = load_content()
     return jsonify({"movie_ids":list(data["movies"].keys()),"serie_ids":list(data["series"].keys())})
 
-# ── IPTV ────────────────────────────────────────────────────────────────
+# ── IPTV ──────────────────────────────────────────────────────────────────────
 @app.route("/api/iptv")
-def api_iptv():
-    return jsonify(load_iptv())
+def api_iptv(): return jsonify(load_iptv())
 
-# ── ADMIN USERS ─────────────────────────────────────────────────────────
+# ── ADMIN USERS ───────────────────────────────────────────────────────────────
 @app.route("/admin/users", methods=["GET"])
 def admin_users_list():
     if not check_admin(request): return jsonify({"error":"Unauthorized"}), 403
@@ -110,16 +253,14 @@ def admin_users_create():
     days = d.get("days")
     expires = (datetime.utcnow()+timedelta(days=int(days))).isoformat() if days else None
     data["users"][username] = {"password":hash_pw(password),"display_name":d.get("display_name",username),"active":True,"expires":expires,"created":datetime.utcnow().isoformat()}
-    save_users(data)
-    return jsonify({"success":True})
+    save_users(data); return jsonify({"success":True})
 
 @app.route("/admin/users/<username>", methods=["DELETE"])
 def admin_users_delete(username):
     if not check_admin(request): return jsonify({"error":"Unauthorized"}), 403
     data = load_users()
     if username not in data["users"]: return jsonify({"error":"No encontrado"}), 404
-    del data["users"][username]; save_users(data)
-    return jsonify({"success":True})
+    del data["users"][username]; save_users(data); return jsonify({"success":True})
 
 @app.route("/admin/users/<username>/toggle", methods=["POST"])
 def admin_users_toggle(username):
@@ -127,8 +268,7 @@ def admin_users_toggle(username):
     data = load_users()
     if username not in data["users"]: return jsonify({"error":"No encontrado"}), 404
     data["users"][username]["active"] = not data["users"][username].get("active",True)
-    save_users(data)
-    return jsonify({"success":True,"active":data["users"][username]["active"]})
+    save_users(data); return jsonify({"success":True,"active":data["users"][username]["active"]})
 
 @app.route("/admin/users/<username>/extend", methods=["POST"])
 def admin_users_extend(username):
@@ -144,7 +284,7 @@ def admin_users_extend(username):
     user["expires"] = (base+timedelta(days=days)).isoformat()
     save_users(data); return jsonify({"success":True,"expires":user["expires"]})
 
-# ── ADMIN CONTENT ────────────────────────────────────────────────────────
+# ── ADMIN CONTENT ─────────────────────────────────────────────────────────────
 @app.route("/admin/content", methods=["GET"])
 def admin_content_list():
     if not check_admin(request): return jsonify({"error":"Unauthorized"}), 403
@@ -184,7 +324,7 @@ def admin_content_delete(ctype, tid):
     if tid not in data[store]: return jsonify({"error":"No encontrado"}), 404
     del data[store][tid]; save_content(data); return jsonify({"success":True})
 
-# ── ADMIN IPTV ────────────────────────────────────────────────────────────
+# ── ADMIN IPTV ─────────────────────────────────────────────────────────────────
 @app.route("/admin/iptv", methods=["GET"])
 def admin_iptv_list():
     if not check_admin(request): return jsonify({"error":"Unauthorized"}), 403
@@ -198,18 +338,9 @@ def admin_iptv_add():
     url  = d.get("url","").strip()
     if not name or not url: return jsonify({"error":"Nombre y URL requeridos"}), 400
     data = load_iptv()
-    ch = {
-        "id":      str(uuid.uuid4())[:8],
-        "name":    name,
-        "url":     url,
-        "logo":    d.get("logo",""),
-        "category":d.get("category","General"),
-        "group":   d.get("group",""),
-        "created": datetime.utcnow().isoformat()
-    }
+    ch = {"id":str(uuid.uuid4())[:8],"name":name,"url":url,"logo":d.get("logo",""),"category":d.get("category","General"),"group":d.get("group",""),"created":datetime.utcnow().isoformat()}
     data["channels"].append(ch)
-    cats = list({c["category"] for c in data["channels"]})
-    data["categories"] = sorted(cats)
+    data["categories"] = sorted(list({c["category"] for c in data["channels"]}))
     save_iptv(data); return jsonify({"success":True,"channel":ch})
 
 @app.route("/admin/iptv/<ch_id>", methods=["PUT"])
@@ -237,16 +368,13 @@ def admin_iptv_import():
     if not check_admin(request): return jsonify({"error":"Unauthorized"}), 403
     d = request.get_json() or {}
     m3u = d.get("m3u","")
-    data = load_iptv()
-    added = 0
-    lines = m3u.split("\n")
-    current = {}
+    data = load_iptv(); added = 0
+    lines = m3u.split("\n"); current = {}
     for line in lines:
         line = line.strip()
         if line.startswith("#EXTINF"):
             name = line.split(",")[-1].strip() if "," in line else "Canal"
-            logo = ""
-            cat  = "General"
+            logo = ""; cat = "General"
             if 'tvg-logo="' in line: logo = line.split('tvg-logo="')[1].split('"')[0]
             if 'group-title="' in line: cat = line.split('group-title="')[1].split('"')[0]
             current = {"name":name,"logo":logo,"category":cat}
@@ -257,5 +385,8 @@ def admin_iptv_import():
     save_iptv(data); return jsonify({"success":True,"added":added})
 
 if __name__ == "__main__":
+    if not HAS_REQUESTS:
+        print("WARNING: 'requests' library not found. IPTV proxy won't work.")
+        print("Install it: pip install requests")
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
