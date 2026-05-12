@@ -1229,26 +1229,7 @@ function renderIptvChannels(){
 let _iptvUrl    = '';
 let _iptvName   = '';
 let _iptvEngine = 'smart'; // smart = prueba proxies automáticamente
-let _proxyIdx   = 0;
-let _hlsInst    = null;
 
-// HLS.js optimizado para live TV (bajo buffer = menos lag)
-const HLS_LIVE_CONFIG = {
-  lowLatencyMode:          true,
-  enableWorker:            true,
-  maxBufferLength:         8,       // 8s máximo buffer → menos lag
-  maxMaxBufferLength:      16,
-  liveSyncDurationCount:   2,
-  liveBackBufferLength:    8,
-  fragLoadingTimeOut:      12000,
-  manifestLoadingTimeOut:  12000,
-  levelLoadingTimeOut:     12000,
-  startLevel:              -1,      // calidad automática
-  abrEwmaDefaultEstimate:  500000,  // 500kbps estimado inicial
-  startFragPrefetch:       true,
-  testBandwidth:           false,
-  xhrSetup: xhr => { xhr.withCredentials = false; }
-};
 
 function playIptv(url, name) {
   _iptvUrl   = url;
@@ -1278,6 +1259,31 @@ function switchIptvPlayer(engine) {
   else if(engine === 'videojs'){ _engineVideojs(_iptvUrl); }
   else { _engineNative(_iptvUrl); }
 }
+
+// ── Proxies en cadena ────────────────────────────────────
+const PROXY_CHAIN = [
+  u => u,
+  u => `${API_URL}/proxy/hls?url=${encodeURIComponent(u)}`,
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
+  u => `https://yacdn.org/proxy/${u}`,
+  u => `https://proxy.cors.sh/${u}`,
+  u => `https://crossorigin.me/${u}`,
+  u => `https://cors.bridged.cc/${u}`,
+  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+];
+
+// HLS.js config optimizada para live TV (bajo buffer = menos lag)
+const HLS_LIVE_CONFIG = {
+  lowLatencyMode:true, enableWorker:true,
+  maxBufferLength:8, maxMaxBufferLength:16,
+  liveSyncDurationCount:2, liveBackBufferLength:8,
+  fragLoadingTimeOut:12000, manifestLoadingTimeOut:12000,
+  levelLoadingTimeOut:12000, startLevel:-1,
+  startFragPrefetch:true, testBandwidth:false,
+  xhrSetup: xhr => { xhr.withCredentials=false; }
+};
 
 // Intenta proxies en cadena hasta encontrar uno que funcione
 function _tryNextProxy() {
