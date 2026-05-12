@@ -789,6 +789,35 @@ function startApp(){
   goSec('home');
   initAdBlock();
   history.pushState({sf:1},'','');
+  // Verificar sesión al iniciar y cada 60 segundos
+  checkSession();
+  setInterval(checkSession, 60000);
+}
+
+async function checkSession(){
+  if(!token) return;
+  try{
+    const r = await fetch(`${API_URL}/api/verify`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({token})
+    });
+    const d = await r.json();
+    if(!d.valid){
+      // Sesión inválida o cuenta vencida → logout inmediato
+      doLogout();
+      showScr('s-login');
+      // Mostrar mensaje de vencimiento
+      setTimeout(()=>{
+        const err=document.getElementById('lf-err');
+        err.textContent='Tu cuenta venció o fue desactivada. Contactá al administrador.';
+        err.style.display='block';
+      }, 300);
+    }
+  }catch(e){
+    // Si no hay red, no cerrar sesión (evita logout por conexión cortada)
+    console.warn('[Session] No se pudo verificar sesión:', e.message);
+  }
 }
 function showScr(id){
   document.querySelectorAll('.scr').forEach(s=>s.classList.toggle('hide',s.id!==id));
@@ -1567,7 +1596,12 @@ function initAdBlock(){
   let _blurTimer;
   window.addEventListener('blur', () => {
     clearTimeout(_blurTimer);
-    _blurTimer = setTimeout(() => popWarn('Ventana emergente bloqueada ✓'), 400);
+    _blurTimer = setTimeout(() => {
+      // No disparar si hay video IPTV reproduciéndose (causa falsos positivos)
+      const vid = document.getElementById('iptv-vid');
+      const iptvActive = vid && !vid.paused && !vid.ended;
+      if (!iptvActive) popWarn('Ventana emergente bloqueada ✓');
+    }, 600);
   });
   window.addEventListener('focus', () => clearTimeout(_blurTimer));
 
