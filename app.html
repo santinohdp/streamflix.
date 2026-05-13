@@ -1255,8 +1255,6 @@ function renderIptvChannels(){
 }
 
 // ═══ IPTV PLAYER — proxy chain inteligente ═══════════════
-let _iptvUrl    = '';
-let _iptvName   = '';
 let _iptvEngine = 'smart'; // smart = prueba proxies automáticamente
 
 
@@ -1289,179 +1287,221 @@ function switchIptvPlayer(engine) {
   else { _engineNative(_iptvUrl); }
 }
 
-// ── Proxies en cadena ────────────────────────────────────
-const PROXY_CHAIN = [
-  u => u,
-  u => `${API_URL}/proxy/hls?url=${encodeURIComponent(u)}`,
-  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u => `https://thingproxy.freeboard.io/fetch/${u}`,
-  u => `https://yacdn.org/proxy/${u}`,
-  u => `https://proxy.cors.sh/${u}`,
-  u => `https://crossorigin.me/${u}`,
-  u => `https://cors.bridged.cc/${u}`,
-  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-];
+// ═══ IPTV PLAYER — simple y funcional ══════════════════
+// Directo primero. Si falla en 6s → Railway proxy automático.
 
-// HLS.js config optimizada para live TV (bajo buffer = menos lag)
-const HLS_LIVE_CONFIG = {
-  lowLatencyMode:true, enableWorker:true,
-  maxBufferLength:8, maxMaxBufferLength:16,
-  liveSyncDurationCount:2, liveBackBufferLength:8,
-  fragLoadingTimeOut:12000, manifestLoadingTimeOut:12000,
-  levelLoadingTimeOut:12000, startLevel:-1,
-  startFragPrefetch:true, testBandwidth:false,
-  xhrSetup: xhr => { xhr.withCredentials=false; }
-};
+let _iptvUrl  = '';
+let _iptvName = '';
+let _hlsInst  = null;
 
-// Intenta proxies en cadena hasta encontrar uno que funcione
-function _tryNextProxy() {
-  if (_proxyIdx >= PROXY_CHAIN.length) {
-    _showIptvStatus('❌ Sin señal. Verificá la URL del canal.', 'error');
-    return;
-  }
-  _tryProxy(_proxyIdx++);
+function playIptv(url, name) {
+  _iptvUrl  = url;
+  _iptvName = name || 'Canal';
+  _proxyIdx = 0;
+  document.getElementById('pl-ttl').textContent = _iptvName;
+  document.getElementById('pl-src').textContent  = 'IPTV Live';
+  document.getElementById('player').classList.add('vis');
+  document.getElementById('iptv-sw-toggle').style.display = 'block';
+  document.getElementById('iptv-switcher').classList.remove('vis');
+  history.pushState({pl:1}, '', '');
+  _startDirect();
 }
 
-function _tryProxy(idx) {
-  const proxyUrl = PROXY_CHAIN[idx](_iptvUrl);
-  const label = idx===0 ? 'Directo' : idx===1 ? 'Proxy Railway' :
-                idx===2 ? 'Proxy 1' : idx===3 ? 'Proxy 2' :
-                `Proxy ${idx-1}`;
-  _showIptvStatus(`🔄 ${label}...`, 'loading');
-  document.getElementById('pl-engine').textContent = label;
-  console.log(`[IPTV] Intentando ${label}:`, proxyUrl.slice(0,80));
-  _buildHlsPlayer(proxyUrl);
+function toggleIptvSwitcher() {
+  document.getElementById('iptv-switcher').classList.toggle('vis');
 }
 
-function _buildHlsPlayer(streamUrl) {
+function switchIptvPlayer(engine) {
+  ['hlsjs','proxy','videojs','native'].forEach(e =>
+    document.getElementById('sw-'+e).classList.toggle('on', e===engine));
+  document.getElementById('iptv-switcher').classList.remove('vis');
   _destroyHls();
-  const pjsWrap = document.getElementById('pjs-wrap');
-  const pf      = document.getElementById('pf');
-  pf.classList.add('hide');
-  pjsWrap.classList.remove('hide');
-  // Reusar video o crear nuevo
-  let video = document.getElementById('iptv-vid');
-  if (!video) {
-    video = document.createElement('video');
-    video.id          = 'iptv-vid';
-    video.controls    = true;
-    video.autoplay    = true;
-    video.playsInline = true;
-    video.style.cssText = 'width:100%;height:100%;background:#000;display:block';
-    pjsWrap.innerHTML = '';
-    pjsWrap.appendChild(video);
-  }
+  if      (engine==='hlsjs')   _startDirect();
+  else if (engine==='proxy')   _startProxy();
+  else if (engine==='videojs') _startVideojs();
+  else                         _startNative();
+}
+
+// ── Motor 1: Directo con HLS.js ─────────────────────────
+function _startDirect() {
+  document.getElementById('pl-engine').textContent = 'Directo';
+  _showStatus('🔄 Conectando...', 'loading');
+  const video = _getVideo();
+  let _autoProxyTimer = null;
 
   function init() {
-    if (window.Hls && Hls.isSupported()) {
-      const hls = new Hls(HLS_LIVE_CONFIG);
-      _hlsInst = hls;
-      let _errCount = 0;
-
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        _showIptvStatus('', '');
-        video.play().catch(()=>{});
-        _errCount = 0;
-      });
-
-      hls.on(Hls.Events.ERROR, (evt, d) => {
-        console.warn('[IPTV] HLS error:', d.type, d.details, d.fatal);
-        if (!d.fatal) return;
-        _errCount++;
-        if (d.type === Hls.ErrorTypes.NETWORK_ERROR && _errCount < 3) {
-          hls.startLoad(); return;
-        }
-        if (d.type === Hls.ErrorTypes.MEDIA_ERROR && _errCount < 2) {
-          hls.recoverMediaError(); return;
-        }
-        // Este proxy falló → intentar el siguiente
-        hls.destroy(); _hlsInst = null;
-        console.log('[IPTV] Proxy falló, probando siguiente...');
-        setTimeout(_tryNextProxy, 500);
-      });
-
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = streamUrl;
+    if (!window.Hls || !Hls.isSupported()) {
+      // Safari nativo
+      video.src = _iptvUrl;
       video.play().catch(()=>{});
-      _showIptvStatus('', '');
-    } else {
-      _tryNextProxy();
+      _showStatus('', '');
+      return;
     }
+    const hls = new Hls({
+      lowLatencyMode: true, enableWorker: true,
+      maxBufferLength: 12, maxMaxBufferLength: 24,
+      liveSyncDurationCount: 3, liveBackBufferLength: 12,
+      fragLoadingTimeOut: 10000, manifestLoadingTimeOut: 10000,
+      startLevel: -1, testBandwidth: false,
+    });
+    _hlsInst = hls;
+    hls.loadSource(_iptvUrl);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      clearTimeout(_autoProxyTimer);
+      _showStatus('', '');
+      document.getElementById('pl-engine').textContent = 'Directo';
+      video.play().catch(()=>{});
+    });
+    hls.on(Hls.Events.ERROR, (e, d) => {
+      if (!d.fatal) return;
+      clearTimeout(_autoProxyTimer);
+      console.log('[IPTV] Error directo, usando proxy...', d.details);
+      hls.destroy(); _hlsInst = null;
+      _startProxy();
+    });
+    // Si en 6s no carga → proxy automático
+    _autoProxyTimer = setTimeout(() => {
+      const vid = document.getElementById('iptv-vid');
+      if (vid && vid.readyState < 2) {
+        console.log('[IPTV] Timeout directo → proxy');
+        hls.destroy(); _hlsInst = null;
+        _startProxy();
+      }
+    }, 6000);
   }
 
   if (window.Hls) { init(); }
   else {
-    _showIptvStatus('🔄 Cargando reproductor...', 'loading');
     const s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js';
-    s.onload  = init;
-    s.onerror = _tryNextProxy;
+    s.onload = init;
+    s.onerror = _startProxy;
     document.head.appendChild(s);
   }
 }
 
-function _engineVideojs(url) {
+// ── Motor 2: Railway Proxy ───────────────────────────────
+function _startProxy() {
+  document.getElementById('pl-engine').textContent = 'Proxy';
+  _showStatus('🔄 Proxy...', 'loading');
+  const video = _getVideo();
+  const proxyUrl = `${API_URL}/proxy/hls?url=${encodeURIComponent(_iptvUrl)}`;
+
+  function init() {
+    if (!window.Hls || !Hls.isSupported()) {
+      video.src = proxyUrl; video.play().catch(()=>{}); _showStatus('',''); return;
+    }
+    const hls = new Hls({
+      lowLatencyMode: true, enableWorker: true,
+      maxBufferLength: 12, maxMaxBufferLength: 24,
+      liveSyncDurationCount: 3, startLevel: -1,
+      fragLoadingTimeOut: 15000, manifestLoadingTimeOut: 15000,
+    });
+    _hlsInst = hls;
+    hls.loadSource(proxyUrl);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      _showStatus('', '');
+      document.getElementById('pl-engine').textContent = 'Proxy Railway';
+      video.play().catch(()=>{});
+    });
+    hls.on(Hls.Events.ERROR, (e, d) => {
+      if (!d.fatal) return;
+      console.warn('[IPTV] Proxy error:', d.details);
+      if (d.type === Hls.ErrorTypes.NETWORK_ERROR) { hls.startLoad(); return; }
+      if (d.type === Hls.ErrorTypes.MEDIA_ERROR)   { hls.recoverMediaError(); return; }
+      _showStatus('❌ Sin señal. Canal puede estar caído.', 'error');
+    });
+  }
+
+  if (window.Hls) { init(); }
+  else {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js';
+    s.onload = init; s.onerror = _startNative;
+    document.head.appendChild(s);
+  }
+}
+
+// ── Motor 3: Video.js ────────────────────────────────────
+function _startVideojs() {
+  document.getElementById('pl-engine').textContent = 'Video.js';
+  _showStatus('🔄 Cargando Video.js...', 'loading');
   _destroyHls();
   const wrap = document.getElementById('pjs-wrap');
   wrap.innerHTML = '';
   wrap.classList.remove('hide');
   document.getElementById('pf').classList.add('hide');
   const vj = document.createElement('video-js');
-  vj.id = 'iptv-vid'; vj.setAttribute('controls',''); vj.setAttribute('autoplay','');
-  vj.setAttribute('playsinline',''); vj.style.cssText = 'width:100%;height:100%;background:#000';
+  vj.id = 'iptv-vid';
+  vj.setAttribute('controls',''); vj.setAttribute('autoplay','');
+  vj.setAttribute('playsinline','');
+  vj.style.cssText = 'width:100%;height:100%;background:#000';
   wrap.appendChild(vj);
-  function initVjs(){
-    try{
-      const p = videojs('iptv-vid',{
-        techOrder:['html5'],
-        html5:{vhs:{overrideNative:true,enableLowInitialPlaylist:true,bandwidth:1000000},nativeAudioTracks:false,nativeVideoTracks:false},
-        liveui:true, autoplay:true, muted:false, controls:true,
-        sources:[{src:url||_iptvUrl, type:'application/x-mpegURL'}]
+
+  function initVjs() {
+    try {
+      const p = videojs('iptv-vid', {
+        techOrder: ['html5'],
+        html5: { vhs: { overrideNative:true, enableLowInitialPlaylist:true }, nativeAudioTracks:false, nativeVideoTracks:false },
+        liveui: true, autoplay: true, controls: true,
+        sources: [{ src: _iptvUrl, type: 'application/x-mpegURL' }]
       });
       p.play().catch(()=>{});
-      document.getElementById('iptv-vid')._videojs=p;
-      _showIptvStatus('','');
-    }catch(e){console.warn('[IPTV] Video.js err:',e);_tryNextProxy();}
+      _showStatus('', '');
+    } catch(e) { console.warn('[IPTV] Video.js err:', e); _startNative(); }
   }
-  if(window.videojs){initVjs();}
-  else{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/video.js@8.10.0/dist/video.min.js';
-    const l=document.createElement('link');l.rel='stylesheet';
-    l.href='https://cdn.jsdelivr.net/npm/video.js@8.10.0/dist/video-js.min.css';
-    document.head.appendChild(l); s.onload=initVjs; s.onerror=_tryNextProxy;
+
+  if (window.videojs) { initVjs(); }
+  else {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = 'https://cdn.jsdelivr.net/npm/video.js@8.10.0/dist/video-js.min.css';
+    document.head.appendChild(l);
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/video.js@8.10.0/dist/video.min.js';
+    s.onload = initVjs; s.onerror = _startNative;
     document.head.appendChild(s);
   }
 }
 
-function _engineNative(url) {
-  _destroyHls();
-  const wrap = document.getElementById('pjs-wrap');
-  wrap.innerHTML=''; wrap.classList.remove('hide');
-  document.getElementById('pf').classList.add('hide');
-  const video = document.createElement('video');
-  video.id='iptv-vid'; video.controls=true; video.autoplay=true; video.playsInline=true;
-  video.style.cssText='width:100%;height:100%;background:#000;display:block';
-  video.src = url || _iptvUrl;
-  wrap.appendChild(video);
+// ── Motor 4: Nativo ──────────────────────────────────────
+function _startNative() {
+  document.getElementById('pl-engine').textContent = 'Nativo';
+  const video = _getVideo();
+  video.src = _iptvUrl;
   video.play().catch(()=>{});
-  _showIptvStatus('','');
+  _showStatus('', '');
+}
+
+// ── Utils ────────────────────────────────────────────────
+function _getVideo() {
+  const wrap = document.getElementById('pjs-wrap');
+  const pf   = document.getElementById('pf');
+  pf.classList.add('hide');
+  wrap.classList.remove('hide');
+  let video = document.getElementById('iptv-vid');
+  if (!video) {
+    wrap.innerHTML = '';
+    video = document.createElement('video');
+    video.id = 'iptv-vid';
+    video.controls = true; video.autoplay = true; video.playsInline = true;
+    video.style.cssText = 'width:100%;height:100%;background:#000;display:block';
+    wrap.appendChild(video);
+  }
+  return video;
 }
 
 function _destroyHls() {
-  if (_hlsInst) { try { _hlsInst.destroy(); } catch(e){} _hlsInst=null; }
+  if (_hlsInst) { try { _hlsInst.destroy(); } catch(e){} _hlsInst = null; }
   const vid = document.getElementById('iptv-vid');
   if (vid) {
     if (vid._videojs) { try { vid._videojs.dispose(); } catch(e){} }
-    try { vid.pause(); vid.src=''; vid.load(); } catch(e){}
+    try { vid.pause(); vid.src = ''; vid.load(); } catch(e){}
   }
 }
 
-function _showIptvStatus(msg, type) {
+function _showStatus(msg, type) {
   const wrap = document.getElementById('pjs-wrap');
   if (!wrap) return;
   let el = document.getElementById('iptv-status-msg');
@@ -1472,10 +1512,11 @@ function _showIptvStatus(msg, type) {
     wrap.appendChild(el);
   }
   if (!msg) { el.style.display='none'; return; }
-  el.style.display='block';
-  el.textContent = msg;
-  el.style.color = type==='error'?'#f87171':type==='loading'?'#a78bfa':'#fff';
+  el.style.display = 'block';
+  el.textContent   = msg;
+  el.style.color   = type==='error'?'#f87171':type==='loading'?'#a78bfa':'#fff';
 }
+
 // ═══ FAVORITES ═══════════════════════════════════════════
 function getFavs(){try{return JSON.parse(localStorage.getItem(FAV_KEY)||'{}');}catch(e){return {};}}
 function updateFavBtn(id,type){
