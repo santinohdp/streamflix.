@@ -230,6 +230,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
         <div class="tbl-hd">
           <div class="tbl-title">📡 Canales IPTV</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-sec btn-sm" onclick="openXtreamModal()">📡 Xtream Codes</button>
             <button class="btn-sec btn-sm" onclick="openImportModal()">📥 Importar M3U</button>
             <button class="btn-main btn-sm" onclick="openIptvModal()">+ Agregar canal</button>
           </div>
@@ -661,6 +662,87 @@ function closeModal(id){
 }
 function escModal(e){if(e.key==='Escape') document.querySelectorAll('.modal-ov.vis').forEach(m=>m.classList.remove('vis'));}
 document.addEventListener('click',e=>{if(e.target.classList.contains('modal-ov')) e.target.classList.remove('vis');});
+
+// ── XTREAM CODES ─────────────────────────────
+function openXtreamModal(){
+  ['xt-server','xt-user','xt-pass'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('xtream-err').style.display='none';
+  document.getElementById('xtream-info').style.display='none';
+  openModal('xtream-modal');
+}
+
+async function testXtream(){
+  const server=document.getElementById('xt-server').value.trim();
+  const user=document.getElementById('xt-user').value.trim();
+  const pass=document.getElementById('xt-pass').value.trim();
+  const err=document.getElementById('xtream-err');
+  const info=document.getElementById('xtream-info');
+  err.style.display='none'; info.style.display='none';
+  if(!server||!user||!pass){err.textContent='Completá todos los campos';err.style.display='block';return;}
+  err.textContent='Verificando...';err.style.display='block';err.style.color='var(--acc3)';
+  try{
+    const r=await fetch(`${_url}/api/iptv/xtream/info`,{
+      method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':_key},
+      body:JSON.stringify({server,username:user,password:pass})
+    });
+    const d=await r.json();
+    err.style.display='none';
+    if(d.valid){
+      const expiry=d.expiry?new Date(d.expiry*1000).toLocaleDateString('es-AR'):'Sin fecha';
+      info.innerHTML=`✅ Cuenta válida · Estado: <strong>${d.status}</strong> · Vence: <strong>${expiry}</strong> · Conexiones: <strong>${d.max_conns}</strong>`;
+      info.style.display='block';
+    }else{
+      err.textContent=d.error||'Cuenta inválida';err.style.display='block';err.style.color='#f87171';
+    }
+  }catch(e){err.textContent='Error de conexión: '+e.message;err.style.display='block';err.style.color='#f87171';}
+}
+
+async function importXtream(){
+  const server=document.getElementById('xt-server').value.trim();
+  const user=document.getElementById('xt-user').value.trim();
+  const pass=document.getElementById('xt-pass').value.trim();
+  const err=document.getElementById('xtream-err');
+  const btn=document.getElementById('xt-import-btn');
+  if(!server||!user||!pass){err.textContent='Completá todos los campos';err.style.display='block';return;}
+  btn.textContent='⏳ Importando...';btn.disabled=true;
+  err.textContent='Esto puede tardar 30-60 segundos según la cantidad de canales...';
+  err.style.display='block';err.style.color='var(--acc3)';
+  try{
+    const r=await fetch(`${_url}/admin/iptv/xtream`,{
+      method:'POST',headers:{'Content-Type':'application/json','X-Admin-Key':_key},
+      body:JSON.stringify({server,username:user,password:pass})
+    });
+    const d=await r.json();
+    if(d.success){
+      closeModal('xtream-modal');
+      alert(`✅ ${d.added} canales importados en ${d.categories} categorías`);
+      loadIptv();loadDashboard();
+    }else{err.textContent=d.error||'Error al importar';err.style.color='#f87171';}
+  }catch(e){err.textContent='Error: '+e.message;err.style.color='#f87171';}
+  btn.textContent='📡 Importar canales';btn.disabled=false;
+}
 </script>
+
+<!-- XTREAM CODES MODAL -->
+<div class="modal-ov" id="xtream-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">📡 Importar Xtream Codes</div>
+    <div style="background:rgba(109,40,217,.08);border:1px solid rgba(109,40,217,.2);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:.8rem;color:var(--acc3);line-height:1.6">
+      Ingresá los datos de tu panel Xtream Codes. Se importarán todos los canales live automáticamente.
+    </div>
+    <div id="xtream-info" style="display:none;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:.8rem;color:var(--green)"></div>
+    <div id="xtream-err" class="lf-err"></div>
+    <div class="fi"><label>URL del Servidor</label><input type="text" id="xt-server" placeholder="http://servidor.com:8080"></div>
+    <div class="fi"><label>Usuario</label><input type="text" id="xt-user" placeholder="usuario"></div>
+    <div class="fi"><label>Contraseña</label><input type="text" id="xt-pass" placeholder="contraseña"></div>
+    <div style="display:flex;gap:8px;margin-top:4px;margin-bottom:14px">
+      <button class="btn-sec btn-sm" onclick="testXtream()" style="flex:1">🔍 Verificar cuenta</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeModal('xtream-modal')">Cancelar</button>
+      <button class="btn-main" onclick="importXtream()" id="xt-import-btn">📡 Importar canales</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
