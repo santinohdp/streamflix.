@@ -384,6 +384,69 @@ def admin_iptv_import():
     data["categories"] = sorted(list({c["category"] for c in data["channels"]}))
     save_iptv(data); return jsonify({"success":True,"added":added})
 
+# ── XTREAM CODES ─────────────────────────────────────────────────────────────
+@app.route("/admin/iptv/xtream", methods=["POST"])
+def admin_iptv_xtream():
+    if not check_admin(request): return jsonify({"error":"Unauthorized"}), 403
+    d = request.get_json() or {}
+    server = d.get("server","").strip().rstrip("/")
+    user   = d.get("username","").strip()
+    pw     = d.get("password","").strip()
+    if not server or not user or not pw:
+        return jsonify({"error":"Faltan datos: server, username, password"}), 400
+    if not HAS_REQUESTS:
+        return jsonify({"error":"Instala: pip install requests"}), 503
+    import requests as rq
+    try:
+        h = dict(PROXY_HEADERS)
+        cat_r = rq.get(f"{server}/player_api.php?username={user}&password={pw}&action=get_live_categories", timeout=15, headers=h)
+        cats  = cat_r.json() if cat_r.status_code==200 else []
+        cat_map = {str(c2.get("category_id","")): c2.get("category_name","General") for c2 in cats}
+        streams_r = rq.get(f"{server}/player_api.php?username={user}&password={pw}&action=get_live_streams", timeout=30, headers=h)
+        streams   = streams_r.json() if streams_r.status_code==200 else []
+        data  = load_iptv()
+        added = 0
+        for s in streams:
+            sid  = s.get("stream_id","")
+            if not sid: continue
+            ext  = s.get("container_extension","ts")
+            cat  = cat_map.get(str(s.get("category_id","")),"General")
+            ch   = {
+                "id":       str(uuid.uuid4())[:8],
+                "name":     s.get("name","Canal"),
+                "url":      f"{server}/live/{user}/{pw}/{sid}.{ext}",
+                "logo":     s.get("stream_icon",""),
+                "category": cat,
+                "group":    "",
+                "xtream":   True,
+                "created":  datetime.utcnow().isoformat()
+            }
+            data["channels"].append(ch); added += 1
+        data["categories"] = sorted(list({c2["category"] for c2 in data["channels"]}))
+        save_iptv(data)
+        return jsonify({"success":True,"added":added,"categories":len(cat_map)})
+    except Exception as e:
+        return jsonify({"error":str(e)[:300]}), 500
+
+@app.route("/api/iptv/xtream/info", methods=["POST"])
+def api_xtream_info():
+    d = request.get_json() or {}
+    server = d.get("server","").strip().rstrip("/")
+    user   = d.get("username","").strip()
+    pw     = d.get("password","").strip()
+    if not server or not user or not pw:
+        return jsonify({"valid":False,"error":"Faltan datos"}), 400
+    if not HAS_REQUESTS:
+        return jsonify({"valid":False,"error":"requests no instalado"}), 503
+    import requests as rq
+    try:
+        r = rq.get(f"{server}/player_api.php?username={user}&password={pw}", timeout=10, headers=PROXY_HEADERS)
+        info = r.json().get("user_info",{})
+        return jsonify({"valid":True,"status":info.get("status",""),"expiry":info.get("exp_date",""),"max_conns":info.get("max_connections","")})
+    except Exception as e:
+        return jsonify({"valid":False,"error":str(e)[:200]}), 500
+
+
 if __name__ == "__main__":
     if not HAS_REQUESTS:
         print("WARNING: 'requests' library not found. IPTV proxy won't work.")
