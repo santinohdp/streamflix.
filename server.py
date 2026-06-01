@@ -450,12 +450,6 @@ def api_xtream_info():
         return jsonify({"valid":False,"error":str(e)[:200]}), 500
 
 
-if __name__ == "__main__":
-    if not HAS_REQUESTS:
-        print("WARNING: 'requests' library not found. IPTV proxy won't work.")
-        print("Install it: pip install requests")
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
 
 # ── MAC → LISTA ───────────────────────────────────────────────────────────────
 MAC_FILE = "mac_listas.json"
@@ -466,7 +460,6 @@ def save_macs(d):  save_json_safe(MAC_FILE, d)
 def normalize_mac(mac):
     return mac.strip().upper().replace("-", ":")
 
-# App consulta: dame la lista asignada a esta MAC
 @app.route("/api/mac/<mac>", methods=["GET"])
 def api_mac_get(mac):
     mac = normalize_mac(mac)
@@ -476,7 +469,6 @@ def api_mac_get(mac):
         return jsonify({"found": False}), 404
     return jsonify({"found": True, "mac": mac, "name": entry.get("name", ""), "url": entry.get("url", "")})
 
-# Panel asigna lista a una MAC
 @app.route("/api/mac", methods=["POST"])
 def api_mac_set():
     if not check_admin(request):
@@ -492,7 +484,6 @@ def api_mac_set():
     save_macs(macs)
     return jsonify({"success": True, "mac": mac})
 
-# Panel lista todas las MACs
 @app.route("/api/mac", methods=["GET"])
 def api_mac_list():
     if not check_admin(request):
@@ -502,7 +493,6 @@ def api_mac_list():
     result.sort(key=lambda x: x.get("updated", ""), reverse=True)
     return jsonify(result)
 
-# Panel elimina una MAC
 @app.route("/api/mac/<mac>", methods=["DELETE"])
 def api_mac_delete(mac):
     if not check_admin(request):
@@ -514,3 +504,10 @@ def api_mac_delete(mac):
     del macs[mac]
     save_macs(macs)
     return jsonify({"success": True})
+
+if __name__ == "__main__":
+    if not HAS_REQUESTS:
+        print("WARNING: 'requests' library not found. IPTV proxy won't work.")
+        print("Install it: pip install requests")
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
