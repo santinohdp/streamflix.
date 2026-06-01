@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Fenix TV</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap');
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: #080510;
+    color: #E8E0D0;
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  body::before {
+    content:'';
+    position:fixed; inset:0; pointer-events:none;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 100%, rgba(204,34,0,0.22) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 40% at 50% 50%, rgba(255,107,0,0.06) 0%, transparent 70%);
+  }
+
+  .card {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 40px 32px;
+    width: 100%;
+    max-width: 420px;
+  }
+
+  .logo {
+    font-size: 64px;
+    margin-bottom: 6px;
+    filter: drop-shadow(0 0 30px rgba(255,107,0,0.6));
+    animation: pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { filter: drop-shadow(0 0 20px rgba(255,107,0,0.5)); }
+    50%      { filter: drop-shadow(0 0 45px rgba(255,107,0,0.9)); }
+  }
+
+  h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    letter-spacing: 8px;
+    background: linear-gradient(90deg, #FF6B00, #FFB300, #FF6B00);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 200% auto;
+    animation: shimmer 3s linear infinite;
+    margin-bottom: 36px;
+  }
+  @keyframes shimmer { to { background-position: 200% center; } }
+
+  .mac-box {
+    background: rgba(255,107,0,0.07);
+    border: 1px solid rgba(255,107,0,0.3);
+    border-radius: 20px;
+    padding: 24px 20px;
+    margin-bottom: 20px;
+  }
+
+  .mac-label {
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: #7A6A5A;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .mac-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 26px;
+    color: #FF6B00;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+    word-break: break-all;
+  }
+
+  .mac-note {
+    font-size: 13px;
+    color: #555;
+    line-height: 1.6;
+  }
+
+  .copy-btn {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 10px 26px;
+    border-radius: 25px;
+    border: 1px solid rgba(255,107,0,0.4);
+    background: rgba(255,107,0,0.1);
+    color: #FF6B00;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .copy-btn:hover, .copy-btn:active { background: rgba(255,107,0,0.22); }
+
+  .status {
+    font-size: 14px;
+    letter-spacing: 1px;
+    color: #7A6A5A;
+    padding: 14px;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #FF6B00;
+    animation: blink 1.2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  .toast {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: linear-gradient(135deg,#FF6B00,#CC2200);
+    color: #fff;
+    padding: 10px 26px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    transition: transform 0.3s cubic-bezier(.175,.885,.32,1.275);
+    z-index: 999;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Loading overlay when connecting */
+  .connecting {
+    position: fixed; inset: 0;
+    background: rgba(8,5,16,0.95);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px; z-index: 100;
+    display: none;
+  }
+  .connecting.show { display: flex; }
+  .connecting .fire { font-size: 60px; animation: pulse 1s ease-in-out infinite; }
+  .connecting p { font-family:'Bebas Neue',sans-serif; font-size:24px; letter-spacing:4px; color:#FF6B00; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">🔥</div>
+  <h1>FENIX TV</h1>
+
+  <div class="mac-box">
+    <div class="mac-label">Tu dirección MAC</div>
+    <div class="mac-value" id="macVal">Cargando...</div>
+    <div class="mac-note">Compartí este código con tu administrador para activar tu servicio</div>
+    <button class="copy-btn" onclick="copyMAC()">📋 COPIAR MAC</button>
+  </div>
+
+  <div class="status" id="status">
+    <div class="dot"></div>
+    <span>Esperando activación...</span>
+  </div>
+</div>
+
+<div class="connecting" id="connecting">
+  <div class="fire">🔥</div>
+  <p>Conectando...</p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  var SERVER = 'https://streamflix-production-9559.up.railway.app';
+  var mac = null;
+  var pollInterval = null;
+  var activated = false;
+
+  // ── Obtener MAC del dispositivo ──────────────────────
+  function getMACFromAndroid() {
+    // Intentar via Android WebView interface
+    try {
+      if (window.Android && window.Android.getMAC) {
+        return window.Android.getMAC();
+      }
+    } catch(e) {}
+    return null;
+  }
+
+  function getStoredMAC() {
+    var m = localStorage.getItem('fenix_mac');
+    if (m) return m;
+    // Generar MAC fija para este dispositivo
+    function h() { return Math.floor(Math.random()*256).toString(16).padStart(2,'0').toUpperCase(); }
+    m = 'FX:'+h()+':'+h()+':'+h()+':'+h()+':'+h();
+    localStorage.setItem('fenix_mac', m);
+    return m;
+  }
+
+  function initMAC() {
+    mac = getMACFromAndroid() || getStoredMAC();
+    document.getElementById('macVal').textContent = mac;
+    startPolling();
+  }
+
+  // ── Polling al servidor ──────────────────────────────
+  function checkMAC() {
+    if (activated) return;
+    fetch(SERVER + '/api/mac/' + encodeURIComponent(mac))
+      .then(function(r) {
+        if (r.status === 404) {
+          setStatus('⏳ Esperando activación...');
+          return null;
+        }
+        return r.json();
+      })
+      .then(function(d) {
+        if (!d) return;
+        if (d.found && d.url) {
+          activated = true;
+          clearInterval(pollInterval);
+          setStatus('✅ Lista encontrada: ' + (d.name || ''));
+          document.getElementById('connecting').classList.add('show');
+          // Redirigir a la app con la URL como parámetro
+          setTimeout(function() {
+            var appUrl = SERVER + '/app?m3u=' + encodeURIComponent(d.url) + '&name=' + encodeURIComponent(d.name || 'Fenix TV');
+            window.location.href = appUrl;
+          }, 1200);
+        }
+      })
+      .catch(function() {
+        setStatus('❌ Sin conexión al servidor');
+      });
+  }
+
+  function startPolling() {
+    checkMAC();
+    pollInterval = setInterval(checkMAC, 5000);
+  }
+
+  function setStatus(msg) {
+    var el = document.getElementById('status');
+    el.innerHTML = msg;
+  }
+
+  function copyMAC() {
+    if (!mac) return;
+    navigator.clipboard.writeText(mac)
+      .then(function() { showToast('✅ MAC copiada'); })
+      .catch(function() { showToast(mac); });
+  }
+
+  var toastT;
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastT);
+    toastT = setTimeout(function() { t.classList.remove('show'); }, 2500);
+  }
+
+  initMAC();
+</script>
+</body>
+</html>
