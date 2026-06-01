@@ -64,9 +64,6 @@ def serve_app(): return send_file(os.path.join(BASE_DIR, "app.html"))
 @app.route("/panel")
 def serve_panel(): return send_file(os.path.join(BASE_DIR, "panel.html"))
 
-@app.route("/mac-panel")
-def serve_mac_panel(): return send_file(os.path.join(BASE_DIR, "mac_panel.html"))
-
 @app.route("/playerjs.js")
 def serve_playerjs():
     pjs = os.path.join(BASE_DIR, "playerjs.js")
@@ -456,61 +453,3 @@ if __name__ == "__main__":
         print("Install it: pip install requests")
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
-
-# ── MAC → LISTA ───────────────────────────────────────────────────────────────
-MAC_FILE = "mac_listas.json"
-
-def load_macs():   return load_json(MAC_FILE, {})
-def save_macs(d):  save_json_safe(MAC_FILE, d)
-
-def normalize_mac(mac):
-    return mac.strip().upper().replace("-", ":")
-
-# App consulta: dame la lista asignada a esta MAC
-@app.route("/api/mac/<mac>", methods=["GET"])
-def api_mac_get(mac):
-    mac = normalize_mac(mac)
-    macs = load_macs()
-    entry = macs.get(mac)
-    if not entry:
-        return jsonify({"found": False}), 404
-    return jsonify({"found": True, "mac": mac, "name": entry.get("name", ""), "url": entry.get("url", "")})
-
-# Panel asigna lista a una MAC
-@app.route("/api/mac", methods=["POST"])
-def api_mac_set():
-    if not check_admin(request):
-        return jsonify({"error": "Unauthorized"}), 403
-    d = request.get_json() or {}
-    mac = normalize_mac(d.get("mac", ""))
-    url = d.get("url", "").strip()
-    name = d.get("name", "").strip()
-    if not mac or not url:
-        return jsonify({"error": "Faltan mac y url"}), 400
-    macs = load_macs()
-    macs[mac] = {"url": url, "name": name, "updated": datetime.utcnow().isoformat()}
-    save_macs(macs)
-    return jsonify({"success": True, "mac": mac})
-
-# Panel lista todas las MACs
-@app.route("/api/mac", methods=["GET"])
-def api_mac_list():
-    if not check_admin(request):
-        return jsonify({"error": "Unauthorized"}), 403
-    macs = load_macs()
-    result = [{"mac": k, **v} for k, v in macs.items()]
-    result.sort(key=lambda x: x.get("updated", ""), reverse=True)
-    return jsonify(result)
-
-# Panel elimina una MAC
-@app.route("/api/mac/<mac>", methods=["DELETE"])
-def api_mac_delete(mac):
-    if not check_admin(request):
-        return jsonify({"error": "Unauthorized"}), 403
-    mac = normalize_mac(mac)
-    macs = load_macs()
-    if mac not in macs:
-        return jsonify({"error": "No encontrado"}), 404
-    del macs[mac]
-    save_macs(macs)
-    return jsonify({"success": True})
