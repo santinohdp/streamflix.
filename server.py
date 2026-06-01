@@ -67,6 +67,9 @@ def serve_panel(): return send_file(os.path.join(BASE_DIR, "panel.html"))
 @app.route("/mac-panel")
 def serve_mac_panel(): return send_file(os.path.join(BASE_DIR, "mac_panel.html"))
 
+@app.route("/fenix")
+def serve_fenix(): return send_file(os.path.join(BASE_DIR, "fenix.html"))
+
 @app.route("/playerjs.js")
 def serve_playerjs():
     pjs = os.path.join(BASE_DIR, "playerjs.js")
