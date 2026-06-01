@@ -1,7 +1,12 @@
-package com.streamflix.app;
+package com.fenixtv.app;
 
 import android.os.Bundle;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
+import android.content.Context;
+import android.provider.Settings;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -10,29 +15,41 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import com.getcapacitor.BridgeActivity;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 public class MainActivity extends BridgeActivity {
 
-    private static final Set<String> BLOCKED_DOMAINS = new HashSet<>(Arrays.asList(
-        "doubleclick.net","googlesyndication.com","googletagmanager.com","googleadservices.com",
-        "google-analytics.com","adservice.google.com","pagead2.googlesyndication.com",
-        "ads.yahoo.com","advertising.com","adnxs.com","adsrvr.org","adform.net","adroll.com",
-        "criteo.com","rubiconproject.com","openx.net","pubmatic.com","appnexus.com",
-        "smartadserver.com","taboola.com","outbrain.com","mgid.com","sharethrough.com",
-        "bidswitch.net","exoclick.com","trafficjunky.com","juicyads.com","propellerads.com",
-        "popads.net","adsterra.com","clickadu.com","adcash.com","yllix.com","trafficstars.com",
-        "hotjar.com","mixpanel.com","coin-hive.com","coinhive.com","facebook.net","connect.facebook.net"
-    ));
+    private String deviceMAC = null;
 
-    private static final String[] BLOCKED_PATTERNS = {"/ads/","popunder","tracker","pixel.","beacon"};
+    // Interface expuesta a JavaScript para obtener la MAC
+    public class AndroidInterface {
+        @JavascriptInterface
+        public String getMAC() {
+            return deviceMAC != null ? deviceMAC : "";
+        }
+    }
+
+    private String getDeviceMAC() {
+        // Android ID como identificador único estable
+        String androidId = Settings.Secure.getString(
+            getContentResolver(), Settings.Secure.ANDROID_ID
+        );
+        if (androidId != null && !androidId.equals("9774d56d682e549c")) {
+            // Formatear como MAC a partir del Android ID
+            String hex = androidId.toUpperCase();
+            while (hex.length() < 12) hex = "0" + hex;
+            hex = hex.substring(0, 12);
+            return hex.substring(0,2)+":"+hex.substring(2,4)+":"+hex.substring(4,6)+
+                   ":"+hex.substring(6,8)+":"+hex.substring(8,10)+":"+hex.substring(10,12);
+        }
+        return null;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        deviceMAC = getDeviceMAC();
 
         WebView wv = getBridge().getWebView();
         WebSettings ws = wv.getSettings();
@@ -41,37 +58,18 @@ public class MainActivity extends BridgeActivity {
         ws.setMediaPlaybackRequiresUserGesture(false);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-        wv.setWebViewClient(new WebViewClient() {
-            @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                String url = request.getUrl().toString();
-                String host = request.getUrl().getHost();
-                if (host != null) {
-                    for (String domain : BLOCKED_DOMAINS) {
-                        if (host.endsWith(domain)) return emptyResponse();
-                    }
-                }
-                for (String pat : BLOCKED_PATTERNS) {
-                    if (url.contains(pat)) return emptyResponse();
-                }
-                return super.shouldInterceptRequest(view, request);
-            }
+        // Exponer la MAC a JavaScript
+        wv.addJavascriptInterface(new AndroidInterface(), "Android");
 
+        wv.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                // Bloquear popups y ventanas nuevas
                 view.evaluateJavascript(
                     "(function(){" +
                     "window.open=function(){return null;};" +
                     "window.alert=function(){};" +
-                    "window.confirm=function(){return true;};" +
-                    "function rm(){document.querySelectorAll('*').forEach(function(e){" +
-                    "try{var s=window.getComputedStyle(e),z=parseInt(s.zIndex)||0,p=s.position,t=e.tagName||'';" +
-                    "if(z>9000&&(p==='fixed'||p==='absolute')&&t!=='VIDEO'&&t!=='IFRAME'){e.remove();}}catch(x){}});" +
-                    "}setInterval(rm,1500);rm();" +
-                    "document.addEventListener('click',function(e){" +
-                    "var a=e.target.closest&&e.target.closest('a');" +
-                    "if(a&&a.target==='_blank'){e.preventDefault();e.stopPropagation();}},true);" +
                     "})();", null);
             }
         });
@@ -81,18 +79,12 @@ public class MainActivity extends BridgeActivity {
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
                 return false;
             }
-
             @Override
             public void onPermissionRequest(PermissionRequest request) {
                 request.grant(request.getResources());
             }
         });
 
-        wv.loadUrl("https://streamflix-production-9559.up.railway.app/app");
-    }
-
-    private WebResourceResponse emptyResponse() {
-        return new WebResourceResponse("text/plain", "utf-8",
-            new java.io.ByteArrayInputStream(new byte[0]));
+        wv.loadUrl("https://streamflix-production-9559.up.railway.app/fenix");
     }
 }
