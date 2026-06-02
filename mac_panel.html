@@ -3,253 +3,715 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fenix TV — Panel MAC</title>
+<title>Fenix TV — Panel de Control</title>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getDatabase, ref, set, get, update, remove, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAmJtRakmbWFeNA7o9ii-Wj2ESbnZLGFcE",
+    authDomain: "helio-santino-rp.firebaseapp.com",
+    databaseURL: "https://helio-santino-rp-default-rtdb.firebaseio.com",
+    projectId: "helio-santino-rp",
+    storageBucket: "helio-santino-rp.firebasestorage.app",
+    messagingSenderId: "1052683565512",
+    appId: "1:1052683565512:web:e7ce898109ea18cfdda8fd"
+  };
+
+  const firebaseApp = initializeApp(firebaseConfig);
+  const auth = getAuth(firebaseApp);
+  const db = getDatabase(firebaseApp);
+
+  window._fb = { auth, db, ref, set, get, update, remove, onValue, push, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut };
+
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      window._currentUser = user;
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appScreen').style.display = 'flex';
+      loadDashboard(user.uid);
+    } else {
+      window._currentUser = null;
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('appScreen').style.display = 'none';
+    }
+  });
+
+  function showToast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + type;
+    setTimeout(() => t.className = 'toast', 3000);
+  }
+
+  async function loadDashboard(uid) {
+    const macsRef = ref(db, `users/${uid}/macs`);
+    onValue(macsRef, (snap) => {
+      const data = snap.val() || {};
+      renderMACs(data, uid);
+      const total = Object.keys(data).length;
+      document.getElementById('statTotal').textContent = total;
+      const active = Object.values(data).filter(m => m.list).length;
+      document.getElementById('statActive').textContent = active;
+    });
+    document.getElementById('userEmail').textContent = window._currentUser.email;
+  }
+
+  function renderMACs(data, uid) {
+    const tbody = document.getElementById('macTableBody');
+    tbody.innerHTML = '';
+    if (Object.keys(data).length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No hay MACs registradas aún</td></tr>';
+      return;
+    }
+    Object.entries(data).forEach(([key, mac]) => {
+      const tr = document.createElement('tr');
+      const listLabel = mac.listType === 'xtream'
+        ? `<span class="badge xtream">Xtream</span> ${mac.xtreamServer || ''}` 
+        : `<span class="badge m3u">M3U</span> ${mac.url ? mac.url.substring(0,35)+'...' : '—'}`;
+      tr.innerHTML = `
+        <td><span class="mac-addr">${mac.mac || key}</span></td>
+        <td>${mac.name || '—'}</td>
+        <td>${listLabel}</td>
+        <td><span class="status ${mac.list ? 'on':'off'}">${mac.list ? 'Activa':'Sin lista'}</span></td>
+        <td class="actions">
+          <button class="btn-icon edit" onclick="openEdit('${key}','${uid}')">✏️</button>
+          <button class="btn-icon del" onclick="deleteMAC('${key}','${uid}')">🗑️</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  window.doLogin = async function() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const pass = document.getElementById('loginPass').value;
+    if (!email || !pass) return showToast('Completa email y contraseña', 'error');
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+      showToast('Sesión iniciada');
+    } catch(e) {
+      showToast('Error: ' + e.message, 'error');
+    }
+  };
+
+  window.doRegister = async function() {
+    const email = document.getElementById('regEmail').value.trim();
+    const pass = document.getElementById('regPass').value;
+    const pass2 = document.getElementById('regPass2').value;
+    if (!email || !pass) return showToast('Completa todos los campos', 'error');
+    if (pass !== pass2) return showToast('Las contraseñas no coinciden', 'error');
+    if (pass.length < 6) return showToast('Mínimo 6 caracteres', 'error');
+    try {
+      await createUserWithEmailAndPassword(auth, email, pass);
+      showToast('Cuenta creada exitosamente');
+    } catch(e) {
+      showToast('Error: ' + e.message, 'error');
+    }
+  };
+
+  window.doLogout = async function() {
+    await signOut(auth);
+    showToast('Sesión cerrada');
+  };
+
+  window.deleteMAC = async function(key, uid) {
+    if (!confirm('¿Eliminar esta MAC?')) return;
+    await remove(ref(db, `users/${uid}/macs/${key}`));
+    showToast('MAC eliminada');
+  };
+
+  window.openAddMAC = function() {
+    document.getElementById('modalTitle').textContent = 'Agregar MAC';
+    document.getElementById('editKey').value = '';
+    document.getElementById('fMac').value = '';
+    document.getElementById('fName').value = '';
+    document.getElementById('fListType').value = 'm3u';
+    toggleListFields();
+    document.getElementById('fUrl').value = '';
+    document.getElementById('fXServer').value = '';
+    document.getElementById('fXUser').value = '';
+    document.getElementById('fXPass').value = '';
+    document.getElementById('macModal').style.display = 'flex';
+  };
+
+  window.openEdit = async function(key, uid) {
+    const snap = await get(ref(db, `users/${uid}/macs/${key}`));
+    const mac = snap.val();
+    if (!mac) return;
+    document.getElementById('modalTitle').textContent = 'Editar MAC';
+    document.getElementById('editKey').value = key;
+    document.getElementById('fMac').value = mac.mac || '';
+    document.getElementById('fName').value = mac.name || '';
+    document.getElementById('fListType').value = mac.listType || 'm3u';
+    toggleListFields();
+    document.getElementById('fUrl').value = mac.url || '';
+    document.getElementById('fXServer').value = mac.xtreamServer || '';
+    document.getElementById('fXUser').value = mac.xtreamUser || '';
+    document.getElementById('fXPass').value = mac.xtreamPass || '';
+    document.getElementById('macModal').style.display = 'flex';
+  };
+
+  window.closeModal = function() {
+    document.getElementById('macModal').style.display = 'none';
+  };
+
+  window.toggleListFields = function() {
+    const type = document.getElementById('fListType').value;
+    document.getElementById('m3uFields').style.display = type === 'm3u' ? 'block' : 'none';
+    document.getElementById('xtreamFields').style.display = type === 'xtream' ? 'block' : 'none';
+  };
+
+  window.saveMAC = async function() {
+    const uid = window._currentUser.uid;
+    const key = document.getElementById('editKey').value;
+    const mac = document.getElementById('fMac').value.trim().toUpperCase();
+    const name = document.getElementById('fName').value.trim();
+    const listType = document.getElementById('fListType').value;
+
+    if (!mac) return showToast('Ingresa la dirección MAC', 'error');
+
+    let listData = {};
+    if (listType === 'm3u') {
+      const url = document.getElementById('fUrl').value.trim();
+      if (!url) return showToast('Ingresa la URL M3U', 'error');
+      listData = { listType: 'm3u', url, list: url };
+    } else {
+      const server = document.getElementById('fXServer').value.trim();
+      const user = document.getElementById('fXUser').value.trim();
+      const pass = document.getElementById('fXPass').value.trim();
+      if (!server || !user || !pass) return showToast('Completa los datos de Xtream', 'error');
+      const xtreamUrl = `${server}/get.php?username=${user}&password=${pass}&type=m3u_plus`;
+      listData = { listType: 'xtream', xtreamServer: server, xtreamUser: user, xtreamPass: pass, url: xtreamUrl, list: xtreamUrl };
+    }
+
+    const payload = { mac, name, ...listData, updatedAt: Date.now() };
+
+    if (key) {
+      await update(ref(db, `users/${uid}/macs/${key}`), payload);
+      showToast('MAC actualizada');
+    } else {
+      const macKey = mac.replace(/:/g, '-');
+      await set(ref(db, `users/${uid}/macs/${macKey}`), payload);
+      showToast('MAC agregada');
+    }
+    closeModal();
+  };
+
+  // API endpoint simulation — reads from Firebase when app calls /api/mac/:mac
+  // This is served by the Railway backend, not here.
+  // The panel just manages the data in Firebase.
+
+  window._showToast = showToast;
+</script>
+
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&family=Share+Tech+Mono&display=swap');
-
   :root {
-    --fire1: #FF6B00; --fire2: #CC2200; --fire3: #FFB300;
-    --dark: #080510; --card: rgba(255,107,0,0.06);
-    --border: rgba(255,107,0,0.25); --text: #E8E0D0; --muted: #7A6A5A;
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --accent: #ff4f00;
+    --accent2: #ff8c42;
+    --text: #e8e8f0;
+    --muted: #6666aa;
+    --green: #00e87a;
+    --red: #ff3355;
+    --xtream: #a855f7;
+    --m3u: #3b82f6;
   }
-  * { margin:0; padding:0; box-sizing:border-box; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
   body {
-    background: var(--dark); color: var(--text);
-    font-family: 'Rajdhani', sans-serif; min-height:100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
   }
+
+  /* ── GRID BACKGROUND ── */
   body::before {
-    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
-    background:
-      radial-gradient(ellipse 80% 50% at 50% 100%, rgba(204,34,0,0.18) 0%, transparent 70%),
-      radial-gradient(ellipse 40% 30% at 20% 80%, rgba(255,107,0,0.1) 0%, transparent 60%);
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,79,0,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,79,0,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
   }
-  body::after {
-    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
-    background-image: linear-gradient(rgba(255,107,0,0.03) 1px,transparent 1px),
-      linear-gradient(90deg,rgba(255,107,0,0.03) 1px,transparent 1px);
-    background-size:40px 40px;
+
+  /* ══════════════ LOGIN ══════════════ */
+  #loginScreen {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+    background: var(--bg);
   }
-  .wrap { position:relative; z-index:1; max-width:820px; margin:0 auto; padding:40px 24px 80px; }
 
-  header { text-align:center; margin-bottom:44px; }
-  h1 {
-    font-family:'Bebas Neue',sans-serif; font-size:52px; letter-spacing:6px;
-    background:linear-gradient(90deg,var(--fire1),var(--fire3),var(--fire1));
-    background-clip:text; -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-    background-size:200% auto; animation:shimmer 3s linear infinite;
+  .login-box {
+    width: 420px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    padding: 48px 40px;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 0 60px rgba(255,79,0,0.1);
   }
-  @keyframes shimmer { to { background-position:200% center; } }
-  .subtitle { color:var(--muted); font-size:13px; letter-spacing:4px; margin-top:4px; }
 
-  /* Admin key */
-  .admin-bar {
-    display:flex; gap:10px; margin-bottom:32px; align-items:center;
-    background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px 18px;
+  .login-logo {
+    text-align: center;
+    margin-bottom: 32px;
   }
-  .admin-bar label { color:var(--muted); font-size:13px; letter-spacing:2px; white-space:nowrap; }
-  .admin-bar input { flex:1; }
 
-  .section-title {
-    font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:4px;
-    color:var(--fire1); margin-bottom:14px;
-    display:flex; align-items:center; gap:10px;
+  .login-logo .logo-text {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    color: var(--text);
   }
-  .section-title::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--border),transparent); }
 
-  /* Form */
-  .form-card {
-    background:var(--card); border:1px solid var(--border);
-    border-radius:18px; padding:26px; margin-bottom:32px;
+  .login-logo .logo-text span { color: var(--accent); }
+  .login-logo .logo-sub { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 3px; margin-top: 4px; }
+
+  .tabs-auth { display: flex; margin-bottom: 28px; border-bottom: 1px solid var(--border); }
+  .tab-btn {
+    flex: 1; background: none; border: none; padding: 12px;
+    font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 600;
+    color: var(--muted); cursor: pointer; transition: color 0.2s;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
   }
-  .fields { display:grid; grid-template-columns:160px 1fr; gap:12px; margin-bottom:14px; }
-  @media(max-width:580px){ .fields { grid-template-columns:1fr; } }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-  input[type="text"], input[type="password"] {
-    width:100%; background:rgba(0,0,0,0.45); border:1px solid var(--border);
-    border-radius:10px; padding:12px 15px; color:var(--text);
-    font-family:'Rajdhani',sans-serif; font-size:15px; font-weight:600; outline:none;
-    transition:border-color .2s, box-shadow .2s;
+  .auth-form { display: none; }
+  .auth-form.active { display: block; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 2px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; }
+
+  input[type="text"], input[type="email"], input[type="password"], input[type="url"], select {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 14px; font-family: 'Space Mono', monospace;
+    font-size: 13px; outline: none; transition: border-color 0.2s;
   }
-  input::placeholder { color:var(--muted); font-weight:400; }
-  input:focus { border-color:var(--fire1); box-shadow:0 0 0 3px rgba(255,107,0,0.12); }
-  .mono { font-family:'Share Tech Mono',monospace; font-size:14px; letter-spacing:1px; }
+  input:focus, select:focus { border-color: var(--accent); }
 
-  .btn {
-    padding:13px 24px; border-radius:11px; border:none; cursor:pointer;
-    font-family:'Bebas Neue',sans-serif; font-size:17px; letter-spacing:2px;
-    transition:opacity .2s, transform .15s;
+  .btn-primary {
+    width: 100%; background: var(--accent); border: none; color: #fff;
+    padding: 13px; font-family: 'Syne', sans-serif; font-size: 15px;
+    font-weight: 800; cursor: pointer; letter-spacing: 1px;
+    transition: background 0.2s, transform 0.1s;
+    text-transform: uppercase; margin-top: 8px;
   }
-  .btn:hover { opacity:.88; transform:translateY(-1px); }
-  .btn-fire { background:linear-gradient(135deg,var(--fire1),var(--fire2)); color:#fff; box-shadow:0 4px 18px rgba(255,107,0,0.3); }
-  .btn-sm {
-    padding:7px 14px; border-radius:8px; border:none; cursor:pointer;
-    font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:700; letter-spacing:1px;
-    transition:all .2s;
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-primary:active { transform: scale(0.98); }
+
+  /* ══════════════ APP ══════════════ */
+  #appScreen {
+    display: none;
+    flex-direction: column;
+    min-height: 100vh;
+    position: relative; z-index: 1;
   }
-  .btn-copy { background:rgba(255,179,0,0.12); border:1px solid rgba(255,179,0,0.3); color:var(--fire3); }
-  .btn-copy:hover { background:rgba(255,179,0,0.25); }
-  .btn-del { background:rgba(204,34,0,0.12); border:1px solid rgba(204,34,0,0.25); color:#FF5533; }
-  .btn-del:hover { background:rgba(204,34,0,0.28); }
 
-  /* Table */
-  .mac-table { display:flex; flex-direction:column; gap:10px; }
-  .mac-row {
-    background:var(--card); border:1px solid var(--border); border-radius:13px;
-    padding:14px 18px; display:grid;
-    grid-template-columns:190px 1fr auto;
-    gap:14px; align-items:center;
-    animation:slideIn .22s ease;
+  /* TOPBAR */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 50;
   }
-  .mac-row:hover { border-color:rgba(255,107,0,0.45); background:rgba(255,107,0,0.09); }
-  @keyframes slideIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
-  @media(max-width:620px){ .mac-row { grid-template-columns:1fr; } }
 
-  .mac-addr { font-family:'Share Tech Mono',monospace; font-size:17px; color:var(--fire1); letter-spacing:2px; }
-  .mac-name { font-size:15px; font-weight:700; color:var(--text); }
-  .mac-url { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .mac-actions { display:flex; gap:8px; justify-content:flex-end; }
+  .topbar-logo { font-size: 22px; font-weight: 800; letter-spacing: -1px; }
+  .topbar-logo span { color: var(--accent); }
 
-  .empty { text-align:center; padding:40px; color:var(--muted); font-size:15px; border:1px dashed rgba(255,107,0,0.15); border-radius:13px; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  #userEmail { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--muted); }
 
+  .btn-logout {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    padding: 7px 16px; font-family: 'Syne', sans-serif; font-size: 13px;
+    font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-logout:hover { border-color: var(--red); color: var(--red); }
+
+  /* CONTENT */
+  .content { padding: 32px; flex: 1; }
+
+  /* STATS */
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 20px 24px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .stat-icon { font-size: 28px; }
+  .stat-val { font-size: 32px; font-weight: 800; color: var(--accent); line-height: 1; }
+  .stat-label { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+
+  /* TABLE SECTION */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-title { font-size: 20px; font-weight: 800; }
+
+  .btn-add {
+    background: var(--accent); border: none; color: #fff;
+    padding: 10px 22px; font-family: 'Syne', sans-serif;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+    transition: background 0.2s;
+  }
+  .btn-add:hover { background: var(--accent2); }
+
+  .table-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: var(--surface2); border-bottom: 1px solid var(--border); }
+  th {
+    padding: 12px 16px; text-align: left;
+    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    color: var(--muted); text-transform: uppercase;
+  }
+  td {
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,79,0,0.03); }
+
+  .mac-addr {
+    font-family: 'Space Mono', monospace; font-size: 13px;
+    color: var(--accent2); letter-spacing: 1px;
+  }
+
+  .badge {
+    display: inline-block; padding: 2px 8px; font-size: 10px;
+    font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    border-radius: 2px;
+  }
+  .badge.m3u { background: rgba(59,130,246,0.15); color: var(--m3u); border: 1px solid rgba(59,130,246,0.3); }
+  .badge.xtream { background: rgba(168,85,247,0.15); color: var(--xtream); border: 1px solid rgba(168,85,247,0.3); }
+
+  .status { display: inline-block; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+  .status.on { background: rgba(0,232,122,0.1); color: var(--green); }
+  .status.off { background: rgba(255,51,85,0.1); color: var(--red); }
+
+  .actions { display: flex; gap: 8px; }
+  .btn-icon {
+    background: var(--surface2); border: 1px solid var(--border);
+    cursor: pointer; width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; transition: border-color 0.2s;
+  }
+  .btn-icon.edit:hover { border-color: var(--accent); }
+  .btn-icon.del:hover { border-color: var(--red); }
+
+  .empty-row { text-align: center; color: var(--muted); padding: 40px; font-size: 14px; }
+
+  /* ══════════════ MODAL ══════════════ */
+  #macModal {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.8); z-index: 200;
+    align-items: center; justify-content: center;
+  }
+
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    width: 500px; max-width: 95vw;
+    max-height: 90vh; overflow-y: auto;
+    padding: 32px;
+  }
+
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .modal-title { font-size: 18px; font-weight: 800; }
+  .btn-close {
+    background: none; border: none; color: var(--muted);
+    font-size: 20px; cursor: pointer; line-height: 1;
+    transition: color 0.2s;
+  }
+  .btn-close:hover { color: var(--red); }
+
+  .type-selector { display: flex; gap: 8px; margin-bottom: 16px; }
+  .type-btn {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--muted); padding: 10px; font-family: 'Syne', sans-serif;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s;
+  }
+  .type-btn.selected, .type-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
+  .btn-cancel {
+    flex: 1; background: none; border: 1px solid var(--border);
+    color: var(--muted); padding: 11px; font-family: 'Syne', sans-serif;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-cancel:hover { border-color: var(--muted); color: var(--text); }
+  .btn-save {
+    flex: 2; background: var(--accent); border: none; color: #fff;
+    padding: 11px; font-family: 'Syne', sans-serif;
+    font-size: 14px; font-weight: 800; cursor: pointer;
+    text-transform: uppercase; transition: background 0.2s;
+  }
+  .btn-save:hover { background: var(--accent2); }
+
+  /* TOAST */
   .toast {
-    position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px);
-    background:linear-gradient(135deg,var(--fire1),var(--fire2)); color:#fff;
-    padding:11px 28px; border-radius:30px;
-    font-family:'Rajdhani',sans-serif; font-size:15px; font-weight:700; letter-spacing:1px;
-    box-shadow:0 8px 28px rgba(255,107,0,0.4); transition:transform .3s cubic-bezier(.175,.885,.32,1.275); z-index:999;
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    color: var(--text); padding: 12px 20px;
+    font-size: 14px; z-index: 999;
+    opacity: 0; pointer-events: none; transform: translateY(8px);
+    transition: all 0.3s; max-width: 320px;
   }
-  .toast.show { transform:translateX(-50%) translateY(0); }
+  .toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .toast.error { border-left-color: var(--red); }
+  .toast.success { border-left-color: var(--green); }
+
+  /* FOOTER NOTE */
+  .api-note {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-left: 3px solid var(--m3u);
+    padding: 14px 18px; margin-top: 24px;
+    font-size: 13px; line-height: 1.6; color: var(--muted);
+  }
+  .api-note strong { color: var(--text); }
+  .api-note code {
+    font-family: 'Space Mono', monospace; font-size: 12px;
+    background: var(--surface); padding: 1px 6px; color: var(--accent2);
+  }
+
+  @media (max-width: 640px) {
+    .stats-row { grid-template-columns: 1fr; }
+    .content { padding: 16px; }
+    .topbar { padding: 12px 16px; }
+    .modal-box { padding: 20px; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <header>
-    <div style="font-size:44px;margin-bottom:8px;">🔥</div>
-    <h1>FENIX TV</h1>
-    <div class="subtitle">Panel de gestión MAC → Lista</div>
-  </header>
-
-  <!-- Admin key -->
-  <div class="admin-bar">
-    <label>🔑 ADMIN KEY</label>
-    <input type="password" id="adminKey" value="admin1234" placeholder="Clave de administrador">
-  </div>
-
-  <!-- Asignar lista a MAC -->
-  <div class="section-title">➕ Asignar Lista a MAC</div>
-  <div class="form-card">
-    <div class="fields">
-      <input type="text" id="inMAC" class="mono" placeholder="AA:BB:CC:DD:EE:FF" maxlength="17">
-      <input type="text" id="inName" placeholder="Nombre del cliente (opcional)">
+<!-- ══════════ LOGIN SCREEN ══════════ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="logo-text">FENIX<span>TV</span></div>
+      <div class="logo-sub">PANEL DE CONTROL</div>
     </div>
-    <div style="margin-bottom:14px;">
-      <input type="text" id="inURL" class="mono" placeholder="http://servidor:puerto/get.php?username=XXX&password=XXX&type=m3u_plus" style="font-size:13px;">
+
+    <div class="tabs-auth">
+      <button class="tab-btn active" onclick="switchTab('login')">Iniciar Sesión</button>
+      <button class="tab-btn" onclick="switchTab('register')">Registrarse</button>
     </div>
-    <button class="btn btn-fire" onclick="asignarMAC()">💾 GUARDAR ASIGNACIÓN</button>
+
+    <div id="formLogin" class="auth-form active">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="loginEmail" placeholder="tu@email.com">
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="loginPass" placeholder="••••••••">
+      </div>
+      <button class="btn-primary" onclick="doLogin()">Entrar →</button>
+    </div>
+
+    <div id="formRegister" class="auth-form">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="regEmail" placeholder="tu@email.com">
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="regPass" placeholder="mínimo 6 caracteres">
+      </div>
+      <div class="form-group">
+        <label>Confirmar contraseña</label>
+        <input type="password" id="regPass2" placeholder="repetir contraseña">
+      </div>
+      <button class="btn-primary" onclick="doRegister()">Crear cuenta →</button>
+    </div>
   </div>
+</div>
 
-  <!-- Lista de MACs -->
-  <div class="section-title">📋 MACs Registradas</div>
-  <div id="macList"><div class="empty">Cargando...</div></div>
+<!-- ══════════ APP SCREEN ══════════ -->
+<div id="appScreen">
+  <nav class="topbar">
+    <div class="topbar-logo">FENIX<span>TV</span> <span style="font-size:13px;color:var(--muted);font-weight:400;">PANEL</span></div>
+    <div class="topbar-right">
+      <span id="userEmail"></span>
+      <button class="btn-logout" onclick="doLogout()">Cerrar sesión</button>
+    </div>
+  </nav>
 
+  <main class="content">
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-icon">📺</div>
+        <div>
+          <div class="stat-val" id="statTotal">0</div>
+          <div class="stat-label">MACs registradas</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">✅</div>
+        <div>
+          <div class="stat-val" id="statActive">0</div>
+          <div class="stat-label">Con lista activa</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🔥</div>
+        <div>
+          <div class="stat-val" style="color:var(--xtream)">FB</div>
+          <div class="stat-label">Firebase conectado</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MACs Table -->
+    <div class="section-header">
+      <div class="section-title">Dispositivos registrados</div>
+      <button class="btn-add" onclick="openAddMAC()">+ Agregar MAC</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Dirección MAC</th>
+            <th>Nombre</th>
+            <th>Lista</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="macTableBody">
+          <tr><td colspan="5" class="empty-row">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- API Note -->
+    <div class="api-note">
+      <strong>¿Cómo funciona?</strong> Tu app FenixTV detecta la MAC del dispositivo y consulta <code>/api/mac/:mac</code> en tu servidor Railway.
+      El servidor lee Firebase y devuelve la URL de la lista asignada. Para <strong>Xtream Codes</strong>, la URL M3U se genera automáticamente como
+      <code>servidor/get.php?username=X&password=Y&type=m3u_plus</code>.
+      Asegúrate de que tu backend Railway también esté conectado a Firebase con las mismas credenciales.
+    </div>
+  </main>
+</div>
+
+<!-- ══════════ MODAL AGREGAR/EDITAR MAC ══════════ -->
+<div id="macModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Agregar MAC</div>
+      <button class="btn-close" onclick="closeModal()">✕</button>
+    </div>
+    <input type="hidden" id="editKey">
+
+    <div class="form-group">
+      <label>Dirección MAC del dispositivo</label>
+      <input type="text" id="fMac" placeholder="AA:BB:CC:DD:EE:FF" style="font-family:'Space Mono',monospace;">
+    </div>
+    <div class="form-group">
+      <label>Nombre del dispositivo (opcional)</label>
+      <input type="text" id="fName" placeholder="ej. Smart TV Sala">
+    </div>
+
+    <div class="form-group">
+      <label>Tipo de lista</label>
+      <div class="type-selector">
+        <button class="type-btn selected" id="btnM3U" onclick="selectType('m3u')">📋 M3U / URL</button>
+        <button class="type-btn" id="btnXtream" onclick="selectType('xtream')">⚡ Xtream Codes</button>
+      </div>
+      <select id="fListType" style="display:none" onchange="toggleListFields()">
+        <option value="m3u">M3U</option>
+        <option value="xtream">Xtream Codes</option>
+      </select>
+    </div>
+
+    <!-- M3U Fields -->
+    <div id="m3uFields">
+      <div class="form-group">
+        <label>URL de la lista M3U</label>
+        <input type="url" id="fUrl" placeholder="http://ejemplo.com/lista.m3u">
+      </div>
+    </div>
+
+    <!-- Xtream Fields -->
+    <div id="xtreamFields" style="display:none">
+      <div class="form-group">
+        <label>Servidor Xtream</label>
+        <input type="url" id="fXServer" placeholder="http://servidor.com:8080">
+      </div>
+      <div class="form-group">
+        <label>Usuario</label>
+        <input type="text" id="fXUser" placeholder="usuario">
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="fXPass" placeholder="contraseña">
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="saveMAC()">💾 Guardar</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
-  const API = '';  // mismo origen
-
-  function adminKey() { return document.getElementById('adminKey').value.trim(); }
-  function headers() { return { 'Content-Type':'application/json', 'X-Admin-Key': adminKey() }; }
-
-  // ── Cargar lista ─────────────────────────────────
-  async function cargarMACs() {
-    try {
-      const r = await fetch(API + '/api/mac', { headers: headers() });
-      if (r.status === 403) { toast('⚠️ Clave admin incorrecta'); return; }
-      const data = await r.json();
-      renderMACs(Array.isArray(data) ? data : []);
-    } catch(e) { toast('❌ Error al conectar'); }
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', (i===0) === (tab==='login')));
+    document.getElementById('formLogin').classList.toggle('active', tab==='login');
+    document.getElementById('formRegister').classList.toggle('active', tab==='register');
   }
 
-  function renderMACs(list) {
-    const cont = document.getElementById('macList');
-    if (!list.length) {
-      cont.innerHTML = '<div class="empty">No hay MACs registradas todavía.</div>';
-      return;
+  function selectType(type) {
+    document.getElementById('fListType').value = type;
+    document.getElementById('btnM3U').classList.toggle('selected', type==='m3u');
+    document.getElementById('btnXtream').classList.toggle('selected', type==='xtream');
+    toggleListFields();
+  }
+
+  // Enter key on login
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const ls = document.getElementById('loginScreen');
+      if (ls.style.display !== 'none') {
+        const activeForm = document.querySelector('.auth-form.active').id;
+        if (activeForm === 'formLogin') window.doLogin && doLogin();
+        else window.doRegister && doRegister();
+      }
     }
-    cont.innerHTML = '<div class="mac-table">' + list.map(function(m) {
-      return '<div class="mac-row">'
-        + '<div><div class="mac-addr">' + esc(m.mac) + '</div>'
-        + (m.name ? '<div class="mac-name">' + esc(m.name) + '</div>' : '')
-        + '</div>'
-        + '<div class="mac-url" title="' + esc(m.url) + '">' + esc(m.url) + '</div>'
-        + '<div class="mac-actions">'
-        + '<button class="btn-sm btn-copy" onclick="copiar(\'' + escA(m.url) + '\')">📋 URL</button>'
-        + '<button class="btn-sm btn-del" onclick="eliminarMAC(\'' + escA(m.mac) + '\')">✕</button>'
-        + '</div>'
-        + '</div>';
-    }).join('') + '</div>';
-  }
-
-  // ── Asignar ──────────────────────────────────────
-  async function asignarMAC() {
-    const mac  = document.getElementById('inMAC').value.trim();
-    const name = document.getElementById('inName').value.trim();
-    const url  = document.getElementById('inURL').value.trim();
-    if (!mac || !url) { toast('⚠️ Ingresá la MAC y la URL'); return; }
-    try {
-      const r = await fetch(API + '/api/mac', {
-        method: 'POST', headers: headers(),
-        body: JSON.stringify({ mac, name, url })
-      });
-      if (r.status === 403) { toast('⚠️ Clave admin incorrecta'); return; }
-      const d = await r.json();
-      if (d.success) {
-        toast('✅ MAC asignada correctamente');
-        document.getElementById('inMAC').value = '';
-        document.getElementById('inName').value = '';
-        document.getElementById('inURL').value = '';
-        cargarMACs();
-      } else { toast('❌ ' + (d.error || 'Error')); }
-    } catch(e) { toast('❌ Error al guardar'); }
-  }
-
-  // ── Eliminar ─────────────────────────────────────
-  async function eliminarMAC(mac) {
-    if (!confirm('¿Eliminar la MAC ' + mac + '?')) return;
-    try {
-      const r = await fetch(API + '/api/mac/' + encodeURIComponent(mac), {
-        method: 'DELETE', headers: headers()
-      });
-      const d = await r.json();
-      if (d.success) { toast('🗑️ Eliminada'); cargarMACs(); }
-      else toast('❌ ' + (d.error || 'Error'));
-    } catch(e) { toast('❌ Error'); }
-  }
-
-  function copiar(url) {
-    navigator.clipboard.writeText(url).then(function(){ toast('✅ URL copiada'); });
-  }
-
-  function esc(s) {
-    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-  function escA(s) { return String(s||'').replace(/'/g,"\\'"); }
-
-  var toastT;
-  function toast(msg) {
-    var t = document.getElementById('toast');
-    t.textContent = msg; t.classList.add('show');
-    clearTimeout(toastT);
-    toastT = setTimeout(function(){ t.classList.remove('show'); }, 2800);
-  }
-
-  // Recargar al cambiar la clave
-  document.getElementById('adminKey').addEventListener('change', cargarMACs);
-
-  cargarMACs();
+  });
 </script>
 </body>
 </html>
