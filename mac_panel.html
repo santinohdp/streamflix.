@@ -189,14 +189,26 @@
 
     const payload = { mac, name, ...listData, updatedAt: Date.now() };
 
+    // Guardar en users/{uid}/macs/
     if (key) {
       await update(ref(db, `users/${uid}/macs/${key}`), payload);
-      showToast('MAC actualizada');
     } else {
       const macKey = mac.replace(/:/g, '-');
       await set(ref(db, `users/${uid}/macs/${macKey}`), payload);
-      showToast('MAC agregada');
     }
+
+    // Escribir en mac_index (nodo publico, lo lee la app sin autenticacion)
+    const idxKey = mac.replace(/:/g, '-');
+    const idxPayload = {
+      mac: mac,
+      url: payload.url || payload.list,
+      name: payload.name || 'Fenix TV',
+      listType: payload.listType || 'm3u',
+      updatedAt: Date.now()
+    };
+    await set(ref(db, `mac_index/${idxKey}`), idxPayload);
+
+    showToast(key ? 'MAC actualizada' : 'MAC agregada');
     closeModal();
   };
 
